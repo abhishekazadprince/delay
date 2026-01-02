@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#050507">
     <meta name="description" content="Scientific inspection tool for time-delayed causal systems.">
-    <title>Assumption Inspector v2.3 [Sci-Export]</title>
+    <title>Assumption Inspector v2.4 [Lab Enhanced]</title>
     <!-- PDF GENERATION LIBRARY -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
@@ -159,6 +159,38 @@
         /* --- DEBUG & OVERLAYS --- */
         #debug-log { position: fixed; top: 0; left: 0; right: 0; background: #7f1d1d; color: #fecaca; font-size: 10px; font-family: monospace; padding: 8px; z-index: 9999; display: none; }
         canvas { touch-action: none; display: block; width: 100%; height: 100%; }
+
+        /* --- LAB HUD STYLES --- */
+        .hud-panel {
+            background: rgba(10, 10, 15, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #aaa;
+            pointer-events: none; /* Let clicks pass through */
+        }
+        .hud-val { color: white; font-weight: bold; margin-left: 6px; }
+        .hud-label { color: #666; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
+        
+        .lab-controls {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(20,20,25,0.9);
+            border: 1px solid #333;
+            border-radius: 30px;
+            padding: 8px 16px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .lab-btn {
+            background: none; border: none; color: #888; cursor: pointer;
+            font-size: 18px; transition: color 0.2s;
+        }
+        .lab-btn:hover, .lab-btn.active { color: var(--accent); }
     </style>
 </head>
 <body>
@@ -174,7 +206,7 @@
         <div style="max-width: 800px; margin: 0 auto; padding-top: 40px; padding-bottom: 100px;">
             <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="font-size: 2.2rem; margin-bottom: 10px; font-weight: 300; letter-spacing: -1px;">Assumption Inspector</h1>
-                <p style="color: var(--text-muted); font-size: 12px; font-family: monospace;">v2.3 [Sci-Export Edition]</p>
+                <p style="color: var(--text-muted); font-size: 12px; font-family: monospace;">v2.4 [LAB ENHANCED]</p>
                 <div style="margin-top: 20px;">
                     <input type="text" id="lib-search" placeholder="Search (e.g. Gravity, Market)..." oninput="window.App.debouncedFilter()">
                 </div>
@@ -184,7 +216,7 @@
         </div>
     </div>
 
-    <!-- VIEW 2: INSPECTOR (MAIN SPLIT) -->
+    <!-- VIEW 2: INSPECTOR (Standard) -->
     <div id="view-inspector" class="view-section" style="background: black;">
         <!-- NAV -->
         <nav class="flex items-center justify-between" style="height: 60px; border-bottom: 1px solid var(--border); background: var(--panel); padding: 0 10px; flex-shrink: 0;">
@@ -288,44 +320,55 @@
         </div>
     </div>
 
-    <!-- VIEW 3: FULL LAB -->
-    <div id="view-lab" class="view-section" style="background: black;">
-        <div style="position: absolute; top: 10px; left: 10px; z-index: 10;"><button onclick="window.App.goInspector()" class="btn" style="background: rgba(0,0,0,0.8);">← BACK</button></div>
+    <!-- VIEW 3: FULL LAB (ENHANCED) -->
+    <div id="view-lab" class="view-section" style="background: #020202;">
+        
+        <!-- TOP HUD -->
+        <div style="position: absolute; top: 10px; left: 10px; z-index: 10; display:flex; gap: 10px; width: calc(100% - 20px);">
+            <button onclick="window.App.goInspector()" class="btn" style="background: rgba(20,20,30,0.8); border-color: #444; width: auto;">← EXIT LAB</button>
+            <div style="flex:1;"></div>
+            <div class="hud-panel"><span class="hud-label">SIM TIME</span><span id="hud-time" class="hud-val">0.0s</span></div>
+        </div>
+
+        <!-- MAIN CANVAS -->
         <canvas id="mainCanvas"></canvas>
-        <div style="position: absolute; top: 60px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 6px; font-family: monospace; font-size: 12px; border: 1px solid var(--border); width: 160px; pointer-events: none;">
-            <div style="color: var(--text-muted); border-bottom: 1px solid var(--border); margin-bottom: 5px;">TELEMETRY</div>
-            <div class="flex justify-between"><span style="color: var(--ideal);">IDEAL</span><span id="lab-ideal">0.00</span></div>
-            <div class="flex justify-between"><span style="color: var(--real);">REAL</span><span id="lab-real">0.00</span></div>
-            <div class="flex justify-between" style="border-top:1px solid var(--border); margin-top:4px; padding-top:2px;"><span style="color: var(--text-muted);">STAB</span><span id="lab-stab">100%</span></div>
+        
+        <!-- CORNER STATS -->
+        <div style="position: absolute; top: 60px; left: 10px; display: flex; flex-direction: column; gap: 6px; width: 180px;">
+            <div class="hud-panel">
+                <div class="hud-label" style="color:var(--ideal);">IDEAL STATE</div>
+                <div class="flex justify-between"><span class="hud-label">POS</span><span id="hud-ideal-pos" class="hud-val">0.00</span></div>
+                <div class="flex justify-between"><span class="hud-label">VEL</span><span id="hud-ideal-vel" class="hud-val">0.00</span></div>
+            </div>
+            <div class="hud-panel">
+                <div class="hud-label" style="color:var(--real);">REAL STATE (DELAYED)</div>
+                <div class="flex justify-between"><span class="hud-label">POS</span><span id="hud-real-pos" class="hud-val">0.00</span></div>
+                <div class="flex justify-between"><span class="hud-label">VEL</span><span id="hud-real-vel" class="hud-val">0.00</span></div>
+                <div class="flex justify-between" style="margin-top:4px; padding-top:4px; border-top:1px solid #333;"><span class="hud-label">DELTA</span><span id="hud-delta" class="hud-val">0.00</span></div>
+            </div>
+        </div>
+
+        <!-- LAB CONTROLS (BOTTOM) -->
+        <div class="lab-controls">
+            <button class="lab-btn" id="btn-slowmo" onclick="window.Sim.toggleSlowMo()" title="Slow Motion (0.1x)">⏱</button>
+            <div style="width: 1px; height: 16px; background: #444;"></div>
+            <button class="lab-btn active" id="btn-trails" onclick="window.Renderer.toggleTrails()" title="Toggle Trails">⌇</button>
+            <button class="lab-btn active" id="btn-vectors" onclick="window.Renderer.toggleVectors()" title="Toggle Vectors">↗</button>
+            <button class="lab-btn" id="btn-grid" onclick="window.Renderer.toggleGrid()" title="Toggle Grid">▦</button>
+            <div style="width: 1px; height: 16px; background: #444;"></div>
+            <button class="lab-btn" onclick="window.Sim.hardReset()" title="Reset" style="color:#ef4444;">↺</button>
         </div>
     </div>
 
 <script>
-/**
- * MERGED SYSTEM ARCHITECTURE (v2.3)
- * ---------------------------------
- * 1. Logic (Sim, DB) taken from 121.html (Scientific Priority)
- * 2. UI/Events taken from 123.html (Stability/Mobile Priority)
- * 3. Bug Fixes: PointerEvents, ResizeObserver, NaN Guards, Loop Management.
- * 4. Sci-Export: PDF and CSV generation tools added.
- */
-
-// --- GLOBAL ERROR HANDLING ---
-window.onerror = function(msg, url, line) { 
-    const log = document.getElementById('debug-log');
-    log.style.display = 'block'; 
-    log.innerHTML += `ERR: ${msg} :${line}<br>`;
-    console.error(msg);
-};
-
-// --- UTILS ---
+// --- CORE UTILS ---
 window.Utils = { 
     debounce: (f, w) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => f.apply(this, a), w); }; },
     lerp: (a, b, t) => a + (b - a) * t,
     clamp: (v, min, max) => Math.max(min, Math.min(max, v))
 };
 
-// --- SCIENTIFIC DATABASE (Preserved from 121.html) ---
+// --- DATABASE (Scientific Core) ---
 window.DB = {
     "gravity": { name: "Retarded Gravitation", timeType: "Continuous", artifacts: ["Phantom Torque", "Spiral Decay"], latex: "F(t) \\propto \\frac{GM}{|r(t-\\tau)|^2}", truth: "Gravity pulls towards where the object WAS, not where it is.", teacher: "Laplace calculated gravity speed > 10^7c to avoid this instability." },
     "pid": { name: "PID Controller", timeType: "Continuous", artifacts: ["Overshoot", "Ringing"], latex: "u(t) = K_p e(t-\\tau) + K_d \\dot{e}(t-\\tau)", truth: "Sensor lag creates a feedback loop that amplifies noise.", teacher: "The #1 cause of real-world robot oscillation." },
@@ -346,13 +389,14 @@ window.DB = {
     "quantum": { name: "Quantum Collapse", timeType: "Field", artifacts: ["Superposition"], latex: "|\\psi\\rangle \\to \\delta(x-x_0)", truth: "Measurement delay creates superposition artifacts.", teacher: "Many-Worlds vs Copenhagen interpretation." }
 };
 
-// --- SIMULATION ENGINE (Logic from 121.html, Robustness Added) ---
+// --- SIMULATION ENGINE ---
 window.Sim = {
     running: false, 
     t: 0, 
     dt: 0.016, 
+    timeScale: 1.0, // Slow-motion factor
     activeKey: null, 
-    rafId: null, // Track animation frame
+    rafId: null, 
     state: {A:null, B:null}, 
     hist: [], 
     HIST_SIZE: 600, 
@@ -361,7 +405,6 @@ window.Sim = {
     mouse: { x: 0, y: 0, down: false }, 
     signal: { type: null, ttl: 0 },
 
-    // Deep clone helper
     clone(o) { 
         if(!o) return o; 
         if(Array.isArray(o)) return o.map(x=>({...x})); 
@@ -369,7 +412,6 @@ window.Sim = {
         return {...o}; 
     },
 
-    // Fast copy helper
     copy(t, s) { 
         if(!s||!t) return; 
         if(s.u) { t.u.set(s.u); t.v.set(s.v); } 
@@ -377,7 +419,6 @@ window.Sim = {
         else Object.assign(t,s); 
     },
 
-    // Initialization Logic (121.html)
     makeState(k) {
         if(k==='gravity') return {x:100, y:0, vx:0, vy:3.5};
         if(k==='pid') return {x:0, v:0, err:0, integ:0};
@@ -399,33 +440,28 @@ window.Sim = {
     init() {
         this.t=0; 
         window.DataLog.reset();
-        const k = this.activeKey || 'gravity'; // Default safety
+        window.Renderer.resetTrails();
+        const k = this.activeKey || 'gravity';
         this.state.A = this.makeState(k); 
         this.state.B = this.makeState(k);
-        // Initialize history with initial state
         this.hist = new Array(this.HIST_SIZE).fill(null).map(() => this.clone(this.state.B));
         this.histIdx = 0;
         this.signal = { type: null, ttl: 0 };
     },
 
-    start() { 
-        if(!this.running) { 
-            this.running=true; 
-            this.loop(); 
-        } 
-    },
-    
-    stop() { 
-        this.running=false; 
-        if(this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = null; }
-    },
-    
+    start() { if(!this.running) { this.running=true; this.loop(); } },
+    stop() { this.running=false; if(this.rafId) { cancelAnimationFrame(this.rafId); this.rafId = null; } },
     togglePause() { this.running ? this.stop() : this.start(); },
     
+    toggleSlowMo() {
+        this.timeScale = this.timeScale < 1.0 ? 1.0 : 0.1;
+        document.getElementById('btn-slowmo').classList.toggle('active', this.timeScale < 1.0);
+    },
+
     hardReset() { 
         this.stop(); 
         this.init(); 
-        window.Renderer.resize(); // Ensure canvas is ready
+        window.Renderer.resize(); 
         this.start(); 
     },
     
@@ -434,20 +470,16 @@ window.Sim = {
         this.signal = { type: type, ttl: type === 'impulse' ? 6 : 180 }; 
     },
 
-    // Differential Equation Solver (Strict 121.html Logic)
     solve(s, inS, isIdeal) {
-        const k = this.activeKey, p = this.config.param, dt = this.dt;
+        const k = this.activeKey, p = this.config.param, dt = this.dt * this.timeScale;
         let force = 0;
         
-        // Input Injection
         if(this.signal.ttl > 0 && !isIdeal) {
             if(this.signal.type === 'impulse') force = 100; else force = Math.sin(this.t * 8) * 30;
             this.signal.ttl--;
         }
-        // Interaction (Mouse/Touch)
         if(this.mouse.down && this.running && !isIdeal) force += (Math.random()-0.5)*100;
 
-        // --- PHYSICS MODELS (121.html) ---
         if(k==='gravity') {
             const r = Math.sqrt(inS.x**2 + inS.y**2); const F = -5000 * p / (Math.pow(Math.max(r,10), 3) + 1);
             s.vx += (F * inS.x + (force?force/10:0)) * dt; s.vy += (F * inS.y) * dt; s.x += s.vx * dt; s.y += s.vy * dt;
@@ -505,34 +537,28 @@ window.Sim = {
     },
 
     step() {
+        // Run physics steps based on time scale
+        // At 1.0x scale -> 2 steps. At 0.1x -> still need simulation stability, so we reduce steps or dt effectively.
+        // We modified solve() to use dt*timeScale, so we can keep steps constant or reduce for performance if needed.
         const steps = 2; 
         for(let i=0; i<steps; i++) {
-            // Calculate delay index
             const delayFrames = Math.floor((this.config.delay / this.dt) * steps);
             let idx = (this.histIdx - delayFrames) % this.HIST_SIZE; 
             if(idx < 0) idx += this.HIST_SIZE;
             
-            // Core Scientific Integration
-            // A = Ideal (Instant feedback: inS is itself)
-            // B = Real (Delayed feedback: inS is hist[idx])
             this.solve(this.state.A, this.state.A, true); 
             this.solve(this.state.B, this.hist[idx], false);
             
-            // History Management
             this.copy(this.hist[this.histIdx], this.state.B); 
             this.histIdx = (this.histIdx + 1) % this.HIST_SIZE; 
-            this.t += (this.dt / steps);
+            this.t += (this.dt / steps) * this.timeScale;
         }
 
-        // --- STABILITY & TELEMETRY ---
         const vA = this.getScalar(this.state.A);
         const vB = this.getScalar(this.state.B);
         
-        // Safety Valve (Improvements from 123.html)
         if(!isFinite(vB) || Math.abs(vB) > 50000 || isNaN(vB)) { 
-            console.warn("Instability detected. Soft reset.");
-            this.init(); // Auto-reset instead of just stopping
-            return;
+            console.warn("Instability. Reset."); this.init(); return;
         }
         
         window.DataLog.push(this.t, vA, vB);
@@ -547,25 +573,55 @@ window.Sim = {
         if(s.u) return s.u[30]; return s.scoreA ? s.scoreA-s.scoreB : 0;
     },
 
+    // EXTRACT VELOCITY SCALAR FOR HUD
+    getVelocityScalar(s) {
+        if(!s) return 0;
+        if(s.vx!==undefined) return Math.sqrt(s.vx**2 + s.vy**2);
+        if(s.v!==undefined) return s.v;
+        return 0;
+    },
+
     updateUI(vA, vB) {
-        if(Math.floor(this.t*60)%10 !== 0) return; // Throttle UI updates
-        const diff = Math.abs(vA - vB);
-        const stab = Math.max(0, 100 - diff * (this.activeKey==='gravity'?0.2:2));
+        if(Math.floor(this.t*60)%10 !== 0) return;
         
+        // Main Inspector UI
         const elTime = document.getElementById('sim-time');
         const elIdeal = document.getElementById('lab-ideal');
         const elReal = document.getElementById('lab-real');
         const elStab = document.getElementById('lab-stab');
         
+        const diff = Math.abs(vA - vB);
+        const stab = Math.max(0, 100 - diff * (this.activeKey==='gravity'?0.2:2));
+
         if(elTime) elTime.innerText = `t = ${this.t.toFixed(2)}s`;
         if(elIdeal) elIdeal.innerText = vA.toFixed(2);
         if(elReal) elReal.innerText = vB.toFixed(2);
         if(elStab) { elStab.innerText = stab.toFixed(0) + '%'; elStab.style.color = stab < 50 ? '#ef4444' : '#10b981'; }
         
+        // Lab HUD Updates (New)
+        const hudTime = document.getElementById('hud-time');
+        const hudIdealPos = document.getElementById('hud-ideal-pos');
+        const hudIdealVel = document.getElementById('hud-ideal-vel');
+        const hudRealPos = document.getElementById('hud-real-pos');
+        const hudRealVel = document.getElementById('hud-real-vel');
+        const hudDelta = document.getElementById('hud-delta');
+
+        if(hudTime) {
+            hudTime.innerText = this.t.toFixed(2) + 's';
+            hudIdealPos.innerText = vA.toFixed(2);
+            hudRealPos.innerText = vB.toFixed(2);
+            hudDelta.innerText = diff.toFixed(3);
+            
+            // Get velocity approximation
+            const velA = this.getVelocityScalar(this.state.A);
+            const velB = this.getVelocityScalar(this.state.B);
+            hudIdealVel.innerText = velA.toFixed(2);
+            hudRealVel.innerText = velB.toFixed(2);
+        }
+
         const cfl = document.getElementById('cfl-light');
         if(cfl) cfl.style.background = stab > 80 ? '#10b981' : '#ef4444';
         
-        // Hide interaction hint if running
         const hint = document.getElementById('interaction-hint');
         if(hint) hint.style.opacity = this.running ? 0.2 : 1.0;
     },
@@ -580,157 +636,89 @@ window.Sim = {
 
 window.DataLog = {
     buffer: new Float32Array(3000), 
-    timeLog: new Float32Array(1000), // Separate buffer to store Time without breaking Renderer's expected stride
+    timeLog: new Float32Array(1000),
     head: 0,
     reset() { this.buffer.fill(0); this.timeLog.fill(0); this.head = 0; },
     push(t, a, b) { 
         if(!isFinite(t)) return; 
         const i = this.head * 3; 
         this.buffer[i]=a; this.buffer[i+1]=b; this.buffer[i+2]=a-b; 
-        this.timeLog[this.head] = t; // Store time separately for export
+        this.timeLog[this.head] = t; 
         this.head = (this.head+1) % 1000; 
     },
     getTrace() { return { buf: this.buffer, head: this.head }; },
-    
-    // New Method for Exporting
     getExportData() {
-        const len = 1000;
-        const rows = [];
-        // Reconstruct timeline from Ring Buffer
+        const len = 1000; const rows = [];
         for(let i=0; i<len; i++) {
             const idx = (this.head + i) % len;
             const t = this.timeLog[idx];
-            if(t === 0 && i < len - 100) continue; // Skip empty prefix
+            if(t === 0 && i < len - 100) continue; 
             const bIdx = idx * 3;
-            rows.push({
-                t: t,
-                ideal: this.buffer[bIdx],
-                real: this.buffer[bIdx+1],
-                delta: this.buffer[bIdx+2]
-            });
+            rows.push({t: t, ideal: this.buffer[bIdx], real: this.buffer[bIdx+1], delta: this.buffer[bIdx+2]});
         }
         return rows;
     }
 };
 
-// --- NEW EXPORTER MODULE ---
 window.Exporter = {
     downloadCSV() {
         const data = window.DataLog.getExportData();
         if(data.length === 0) { alert("No simulation data to export."); return; }
-        
         let csv = "Time (s),Ideal State,Real State (Delayed),Delta\n";
-        data.forEach(r => {
-            csv += `${r.t.toFixed(4)},${r.ideal.toFixed(4)},${r.real.toFixed(4)},${r.delta.toFixed(4)}\n`;
-        });
-        
+        data.forEach(r => { csv += `${r.t.toFixed(4)},${r.ideal.toFixed(4)},${r.real.toFixed(4)},${r.delta.toFixed(4)}\n`; });
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `inspector_data_${window.Sim.activeKey}_${Date.now()}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const a = document.createElement('a'); a.href = url; a.download = `inspector_data_${window.Sim.activeKey}_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(url);
     },
-
     generatePDF() {
         const { jsPDF } = window.jspdf;
         if(!jsPDF) { alert("PDF Library not loaded."); return; }
-
         const doc = new jsPDF();
         const data = window.DataLog.getExportData();
         const model = window.DB[window.Sim.activeKey];
-        
-        // --- 1. Header ---
-        doc.setFillColor(5, 5, 7);
-        doc.rect(0, 0, 210, 40, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(22);
-        doc.text("Assumption Inspector", 15, 20);
-        doc.setFontSize(10);
-        doc.setTextColor(200, 200, 200);
-        doc.text("Scientific Report v2.3", 15, 30);
-        
-        // --- 2. Model Metadata ---
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(14);
-        doc.text(`Model: ${model.name}`, 15, 55);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Timestamp: ${new Date().toLocaleString()}`, 15, 62);
-        doc.text(`Time Type: ${model.timeType}`, 15, 68);
-        doc.text(`Artifacts: ${model.artifacts.join(", ")}`, 15, 74);
-        
-        // --- 3. Configuration ---
-        doc.setDrawColor(200, 200, 200);
-        doc.line(15, 80, 195, 80);
-        doc.setFontSize(12);
-        doc.setTextColor(0,0,0);
-        doc.text("Simulation Parameters", 15, 90);
-        doc.setFontSize(10);
-        doc.text(`Delay (tau): ${window.Sim.config.delay.toFixed(2)}s`, 15, 100);
+        doc.setFillColor(5, 5, 7); doc.rect(0, 0, 210, 40, 'F');
+        doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.text("Assumption Inspector", 15, 20);
+        doc.setFontSize(10); doc.setTextColor(200, 200, 200); doc.text("Scientific Report v2.3", 15, 30);
+        doc.setTextColor(0, 0, 0); doc.setFontSize(14); doc.text(`Model: ${model.name}`, 15, 55);
+        doc.setFontSize(10); doc.setTextColor(100, 100, 100); doc.text(`Timestamp: ${new Date().toLocaleString()}`, 15, 62);
+        doc.text(`Time Type: ${model.timeType}`, 15, 68); doc.text(`Artifacts: ${model.artifacts.join(", ")}`, 15, 74);
+        doc.setDrawColor(200, 200, 200); doc.line(15, 80, 195, 80);
+        doc.setFontSize(12); doc.setTextColor(0,0,0); doc.text("Simulation Parameters", 15, 90);
+        doc.setFontSize(10); doc.text(`Delay (tau): ${window.Sim.config.delay.toFixed(2)}s`, 15, 100);
         doc.text(`Coupling Strength: ${window.Sim.config.param.toFixed(2)}`, 80, 100);
         doc.text(`Duration Recorded: ${data.length > 0 ? (data[data.length-1].t - data[0].t).toFixed(2) : 0}s`, 140, 100);
-
-        // --- 4. Statistics ---
-        let maxDelta = 0;
-        let mse = 0;
-        data.forEach(d => {
-            const absD = Math.abs(d.delta);
-            if(absD > maxDelta) maxDelta = absD;
-            mse += (d.delta * d.delta);
-        });
+        let maxDelta = 0; let mse = 0;
+        data.forEach(d => { const absD = Math.abs(d.delta); if(absD > maxDelta) maxDelta = absD; mse += (d.delta * d.delta); });
         mse = data.length ? (mse / data.length) : 0;
-        
-        doc.text(`Max Deviation: ${maxDelta.toFixed(4)}`, 15, 106);
-        doc.text(`Mean Squared Error: ${mse.toFixed(4)}`, 80, 106);
-
-        // --- 5. Visual Snapshot ---
+        doc.text(`Max Deviation: ${maxDelta.toFixed(4)}`, 15, 106); doc.text(`Mean Squared Error: ${mse.toFixed(4)}`, 80, 106);
         doc.text("Oscilloscope Trace", 15, 125);
         const canvas = document.getElementById('graphCanvas');
         if(canvas) {
-            // Create a temporary white canvas to avoid black background in PDF
-            const tmpCanvas = document.createElement('canvas');
-            tmpCanvas.width = canvas.width;
-            tmpCanvas.height = canvas.height;
-            const ctx = tmpCanvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0,0,tmpCanvas.width, tmpCanvas.height);
-            ctx.drawImage(canvas, 0, 0);
-            
-            try {
-                const imgData = tmpCanvas.toDataURL("image/jpeg", 0.8);
-                doc.addImage(imgData, 'JPEG', 15, 130, 180, 60);
-            } catch(e) {
-                doc.text("(Visual snapshot unavailable - Tainted Canvas)", 15, 140);
-            }
+            const tmpCanvas = document.createElement('canvas'); tmpCanvas.width = canvas.width; tmpCanvas.height = canvas.height;
+            const ctx = tmpCanvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,tmpCanvas.width, tmpCanvas.height); ctx.drawImage(canvas, 0, 0);
+            try { const imgData = tmpCanvas.toDataURL("image/jpeg", 0.8); doc.addImage(imgData, 'JPEG', 15, 130, 180, 60); } catch(e) {}
         }
-
-        // --- 6. Mathematical Note ---
-        doc.setFillColor(245, 245, 250);
-        doc.rect(15, 200, 180, 30, 'F');
-        doc.setFontSize(10);
-        doc.setTextColor(50, 50, 50);
-        doc.text("Mathematical Formalism:", 20, 210);
-        doc.setFont("courier");
-        doc.text(model.latex, 20, 220);
-        
-        // --- 7. Pedagogical Note ---
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(9);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`"${model.truth}"`, 105, 270, { align: "center" });
-
+        doc.setFillColor(245, 245, 250); doc.rect(15, 200, 180, 30, 'F');
+        doc.setFontSize(10); doc.setTextColor(50, 50, 50); doc.text("Mathematical Formalism:", 20, 210);
+        doc.setFont("courier"); doc.text(model.latex, 20, 220);
+        doc.setFont("helvetica", "italic"); doc.setFontSize(9); doc.setTextColor(100, 100, 100); doc.text(`"${model.truth}"`, 105, 270, { align: "center" });
         doc.save(`inspector_report_${window.Sim.activeKey}.pdf`);
     }
 };
 
 window.Renderer = {
     showPhase: false, 
+    showTrails: true,
+    showVectors: true,
+    showGrid: false,
+    trails: { A: [], B: [] }, // Trail Buffers
     togglePhase(v) { this.showPhase = v; },
-    
-    // Robust Resizer (New in v3)
+    toggleTrails() { this.showTrails = !this.showTrails; document.getElementById('btn-trails').classList.toggle('active', this.showTrails); },
+    toggleVectors() { this.showVectors = !this.showVectors; document.getElementById('btn-vectors').classList.toggle('active', this.showVectors); },
+    toggleGrid() { this.showGrid = !this.showGrid; document.getElementById('btn-grid').classList.toggle('active', this.showGrid); },
+
+    resetTrails() { this.trails.A = []; this.trails.B = []; },
+
     resize() {
         const canvases = ['physCanvas', 'mainCanvas', 'graphCanvas'];
         canvases.forEach(id => {
@@ -738,11 +726,8 @@ window.Renderer = {
             if(!c) return;
             const rect = c.parentElement.getBoundingClientRect();
             const dpr = window.devicePixelRatio || 1;
-            c.width = rect.width * dpr;
-            c.height = rect.height * dpr;
-            // Prevent styling issues
-            c.style.width = '100%';
-            c.style.height = '100%';
+            c.width = rect.width * dpr; c.height = rect.height * dpr;
+            c.style.width = '100%'; c.style.height = '100%';
         });
         this.draw();
     },
@@ -765,13 +750,71 @@ window.Renderer = {
         ctx.save(); 
         ctx.translate(cx, cy); 
         ctx.scale(dpr, dpr); 
+
+        // --- LAB EXCLUSIVE RENDER (GRID & TRAILS) ---
+        if(isLab) {
+            // 1. Grid
+            if(this.showGrid) {
+                ctx.strokeStyle = '#1f1f23'; ctx.lineWidth = 1; ctx.beginPath();
+                for(let gx=-cx/dpr; gx<cx/dpr; gx+=50) { ctx.moveTo(gx, -cy/dpr); ctx.lineTo(gx, cy/dpr); }
+                for(let gy=-cy/dpr; gy<cy/dpr; gy+=50) { ctx.moveTo(-cx/dpr, gy); ctx.lineTo(cx/dpr, gy); }
+                ctx.stroke();
+                // Axes
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(-cx/dpr, 0); ctx.lineTo(cx/dpr, 0); ctx.moveTo(0, -cy/dpr); ctx.lineTo(0, cy/dpr); ctx.stroke();
+            }
+
+            // 2. Connector (Error Vector)
+            if(this.showVectors && window.Sim.activeKey === 'gravity') {
+                const sA = window.Sim.state.A; const sB = window.Sim.state.B;
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; // Fail color
+                ctx.setLineDash([5, 5]);
+                ctx.moveTo(sA.x, sA.y); ctx.lineTo(sB.x, sB.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 3. Update Trails (Only for certain physics)
+            if(this.showTrails && window.Sim.running && Math.random() > 0.5) {
+                const addTrail = (s, arr) => {
+                    if(s.x !== undefined && s.y !== undefined) {
+                        arr.push({x:s.x, y:s.y});
+                        if(arr.length > 50) arr.shift();
+                    }
+                };
+                addTrail(window.Sim.state.A, this.trails.A);
+                addTrail(window.Sim.state.B, this.trails.B);
+            }
+
+            // 4. Draw Trails
+            const drawTrail = (arr, color) => {
+                if(arr.length < 2) return;
+                ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2;
+                ctx.moveTo(arr[0].x, arr[0].y);
+                for(let i=1; i<arr.length; i++) ctx.lineTo(arr[i].x, arr[i].y);
+                ctx.stroke();
+            };
+            if(this.showTrails) {
+                ctx.globalAlpha = 0.3; drawTrail(this.trails.A, '#10b981');
+                ctx.globalAlpha = 0.6; drawTrail(this.trails.B, '#f59e0b');
+                ctx.globalAlpha = 1.0;
+            }
+        }
         
         const k = window.Sim.activeKey; 
 
         // Drawing Entity (Logic from 121.html)
-        const drawEntity = (s, col) => {
+        const drawEntity = (s, col, isShadow) => {
             ctx.fillStyle = col; ctx.strokeStyle = col;
-            if(k === 'gravity') { ctx.beginPath(); ctx.arc(s.x, s.y, 6, 0, 7); ctx.fill(); } 
+            if(k === 'gravity') { 
+                ctx.beginPath(); ctx.arc(s.x, s.y, isShadow?6:8, 0, 7); ctx.fill(); 
+                // Lab Vector
+                if(isLab && this.showVectors && !isShadow && s.vx) {
+                    ctx.beginPath(); ctx.strokeStyle=col; ctx.lineWidth=2;
+                    ctx.moveTo(s.x, s.y); ctx.lineTo(s.x+s.vx*5, s.y+s.vy*5); ctx.stroke();
+                }
+            } 
             else if(k === 'pid') { ctx.fillRect(-100, -10, 200, 20); ctx.fillStyle='#fff'; ctx.fillRect(s.x-100-5, -15, 10, 30); }
             else if(k === 'hookes') { ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(s.x-100, 0); ctx.stroke(); ctx.beginPath(); ctx.arc(s.x-100, 0, 8, 0, 7); ctx.fill(); }
             else if(k === 'pendulum_double') { const l=50; const x1=l*Math.sin(s.t1), y1=l*Math.cos(s.t1), x2=x1+l*Math.sin(s.t2), y2=y1+l*Math.cos(s.t2); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
@@ -788,8 +831,8 @@ window.Renderer = {
             const plot = (s, col) => { let x=(s.x||0)*2, y=(s.v||0)*2; if(s.P!==undefined){x=(s.P-50)*2;y=(s.S-50)*2;} ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x, -y, 2, 0, 7); ctx.fill(); };
             plot(window.Sim.state.A, '#10b981'); plot(window.Sim.state.B, '#f59e0b');
         } else {
-            ctx.globalAlpha = 0.4; drawEntity(window.Sim.state.A, '#10b981');
-            ctx.globalAlpha = 1.0; drawEntity(window.Sim.state.B, '#f59e0b');
+            ctx.globalAlpha = 0.4; drawEntity(window.Sim.state.A, '#10b981', true);
+            ctx.globalAlpha = 1.0; drawEntity(window.Sim.state.B, '#f59e0b', false);
         }
         ctx.restore();
 
@@ -827,44 +870,21 @@ window.Renderer = {
 
 window.App = {
     debouncedFilter: window.Utils.debounce(() => window.App.filterLibrary(), 200),
-    
-    goHome() { 
-        window.Sim.stop(); 
-        toggleView('view-library'); 
-    },
-    
-    enterLab() { 
-        toggleView('view-lab'); 
-        window.Renderer.resize(); 
-    },
-    
-    goInspector() { 
-        toggleView('view-inspector'); 
-        window.Renderer.resize(); 
-    },
-    
-    updateDelay(v) { 
-        document.getElementById('delay-val').innerText = ((v/100)*2).toFixed(2)+'s'; 
-        window.Sim.config.delay = (v/100)*2; 
-    },
-    
-    toggleDrawer() { 
-        const el = document.getElementById('drawer'); 
-        el.style.transform = el.style.transform === 'translateX(0%)' ? 'translateX(100%)' : 'translateX(0%)'; 
-    },
-    
+    goHome() { window.Sim.stop(); toggleView('view-library'); },
+    enterLab() { toggleView('view-lab'); window.Renderer.resize(); },
+    goInspector() { toggleView('view-inspector'); window.Renderer.resize(); },
+    updateDelay(v) { document.getElementById('delay-val').innerText = ((v/100)*2).toFixed(2)+'s'; window.Sim.config.delay = (v/100)*2; },
+    toggleDrawer() { const el = document.getElementById('drawer'); el.style.transform = el.style.transform === 'translateX(0%)' ? 'translateX(100%)' : 'translateX(0%)'; },
     toggleTeacher(a) { document.getElementById('teacher-panel').classList.toggle('hidden', !a); },
     toggleCRT(a) { document.getElementById('crt-layer').style.display = a ? 'block' : 'none'; },
     
     loadModel(k) { 
         window.Sim.stop(); 
         toggleView('view-inspector'); 
-        
         window.Sim.activeKey = k; 
         window.Sim.init(); 
-        window.Renderer.resize(); // Critical for first load
+        window.Renderer.resize(); 
         window.Sim.start(); 
-        
         const m = window.DB[k]; 
         document.getElementById('nav-title').innerText = m.name.toUpperCase(); 
         document.getElementById('info-truth').innerText = `"${m.truth}"`; 
@@ -875,10 +895,8 @@ window.App = {
     
     filterLibrary() {
         if(typeof window.DB === 'undefined') { setTimeout(window.App.filterLibrary, 200); return; }
-        const grid = document.getElementById('lib-grid'); 
-        grid.innerHTML = ''; 
+        const grid = document.getElementById('lib-grid'); grid.innerHTML = ''; 
         document.getElementById('lib-loading').style.display = 'none';
-        
         const q = document.getElementById('lib-search').value.toLowerCase();
         Object.entries(window.DB).forEach(([k, m]) => {
             if(q && !m.name.toLowerCase().includes(q) && !m.artifacts.join('').toLowerCase().includes(q)) return;
@@ -890,61 +908,32 @@ window.App = {
 };
 
 function toggleView(id) { 
-    document.querySelectorAll('.view-section').forEach(e => { 
-        e.classList.remove('active'); 
-        e.style.opacity = 0; 
-    }); 
-    const el = document.getElementById(id); 
-    el.classList.add('active'); 
-    setTimeout(() => el.style.opacity = 1, 50); 
-    
+    document.querySelectorAll('.view-section').forEach(e => { e.classList.remove('active'); e.style.opacity = 0; }); 
+    const el = document.getElementById(id); el.classList.add('active'); setTimeout(() => el.style.opacity = 1, 50); 
     if(id==='view-library') document.getElementById('drawer').style.transform = 'translateX(100%)'; 
 }
 
-// --- UNIFIED INPUT HANDLING (POINTER EVENTS) ---
-// Replaces mouse/touch split from 123.html with robust PointerEvents
 const attachInput = (id) => {
     const c = document.getElementById(id);
     if(!c) return;
-
-    // Use Pointer Events for unified touch/mouse support
-    c.addEventListener('pointerdown', (e) => {
-        c.setPointerCapture(e.pointerId);
-        window.Sim.mouse.down = true;
-        updateMouse(e, c);
-    });
-
-    c.addEventListener('pointermove', (e) => {
-        if(window.Sim.mouse.down) updateMouse(e, c);
-    });
-
-    c.addEventListener('pointerup', (e) => {
-        window.Sim.mouse.down = false;
-        c.releasePointerCapture(e.pointerId);
-    });
-    
-    c.addEventListener('pointercancel', (e) => {
-        window.Sim.mouse.down = false;
-    });
+    c.addEventListener('pointerdown', (e) => { c.setPointerCapture(e.pointerId); window.Sim.mouse.down = true; updateMouse(e, c); });
+    c.addEventListener('pointermove', (e) => { if(window.Sim.mouse.down) updateMouse(e, c); });
+    c.addEventListener('pointerup', (e) => { window.Sim.mouse.down = false; c.releasePointerCapture(e.pointerId); });
+    c.addEventListener('pointercancel', (e) => { window.Sim.mouse.down = false; });
 };
 
 const updateMouse = (e, c) => {
     const rect = c.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    // Calculate position relative to canvas
-    window.Sim.mouse.x = (e.clientX - rect.left); // Physics uses logic coords
+    window.Sim.mouse.x = (e.clientX - rect.left); 
     window.Sim.mouse.y = (e.clientY - rect.top);
 };
 
-// --- LIFECYCLE MANAGEMENT ---
 window.addEventListener('resize', window.Utils.debounce(() => window.Renderer.resize(), 200));
 
 // Init
 window.App.filterLibrary(); 
 attachInput('physCanvas'); 
 attachInput('mainCanvas');
-
-// Initial resize to ensure canvas isn't 0x0
 setTimeout(() => window.Renderer.resize(), 100);
 
 </script>
