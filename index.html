@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#050507">
-    <meta name="description" content="Assumption Inspector v2.0 [Stable] - Causal Delay Analysis">
+    <meta name="description" content="Assumption Inspector v2.0 - Causal Delay Analysis">
     <title>Assumption Inspector v2.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -114,7 +114,9 @@
                            class="w-full bg-[#0a0a0c] border border-[#222] text-white py-3 pl-10 pr-4 rounded focus:outline-none focus:border-accent transition-all font-mono text-sm shadow-xl h-12">
                 </div>
             </header>
-            <div id="lib-loading" class="text-center text-gray-600 font-mono text-xs py-10">Initializing Neural Database...</div>
+            
+            <div id="lib-loading" class="text-center text-gray-600 font-mono text-xs py-10 animate-pulse">Initializing Neural Database...</div>
+            
             <div id="lib-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 px-1 pb-10"></div>
         </div>
     </div>
@@ -654,7 +656,7 @@ const App = {
     loadModel(k) { Sim.stop(); toggleView('view-inspector'); Sim.activeKey = k; Sim.init(); Sim.start(); const m = DB[k]; document.getElementById('active-law-name').innerText = m.name; document.getElementById('insp-truth').innerText = `"${m.truth}"`; },
     
     filterLibrary() {
-        if(!window.DB) { setTimeout(App.filterLibrary, 200); return; } // Safety check
+        if(typeof DB === 'undefined') { setTimeout(App.filterLibrary, 200); return; } // SCOPE-SAFE FIX
         const grid = document.getElementById('lib-grid'); grid.innerHTML = '';
         const loading = document.getElementById('lib-loading'); if(loading) loading.style.display = 'none';
         
