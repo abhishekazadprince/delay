@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#050507">
+    <meta name="description" content="Assumption Inspector v2.0 [Stable] - Causal Delay Analysis">
+    <title>Assumption Inspector v2.0</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        :root { --bg: #050507; --accent: #f59e0b; --ideal: #10b981; --real: #f59e0b; --fail: #ef4444; }
+        
+        /* CORE LAYOUT */
+        body { 
+            background: var(--bg); color: #ededf0; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+            height: 100dvh; 
+            width: 100vw;
+            overflow: hidden; 
+            display: flex; flex-direction: column; 
+            -webkit-tap-highlight-color: transparent; 
+        }
+        
+        /* VIEWS */
+        .view-section { display: none !important; opacity: 0; transition: opacity 0.3s ease; }
+        .view-section.active { display: flex !important; opacity: 1; }
+        
+        /* CANVAS */
+        canvas { display: block; touch-action: none; width: 100%; height: 100%; }
+        
+        /* UI COMPONENTS */
+        .glass-panel { background: rgba(10,10,12,0.9); border: 1px solid #1f1f23; border-radius: 8px; backdrop-filter: blur(16px); box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+        
+        /* LIBRARY CARDS */
+        .lib-card { 
+            background: linear-gradient(180deg, #0f0f12, #0a0a0c); 
+            border: 1px solid #1f1f23; border-radius: 8px; 
+            padding: 16px; cursor: pointer; position: relative; overflow: hidden; 
+        }
+        .lib-card:active { background: #1a1a1e; transform: scale(0.98); transition: transform 0.1s; }
+        .lib-card:hover { border-color: var(--accent); }
+        
+        /* SLIDERS - Enlarged for touch */
+        input[type=range] { -webkit-appearance: none; background: transparent; height: 30px; width: 100%; cursor: pointer; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #ededf0; margin-top: -8px; box-shadow: 0 0 0 2px var(--bg); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #333; border-radius: 2px; }
+        
+        /* BUTTONS - Touch friendly */
+        .btn-action { 
+            background: #15151a; border: 1px solid #333; color: #ccc; 
+            font-size: 11px; font-weight: 700; font-family: monospace; 
+            padding: 10px 14px; border-radius: 6px; 
+            text-transform: uppercase; display: flex; align-items: center; gap: 8px; 
+            transition: background 0.2s; min-height: 40px;
+        }
+        .btn-action:active { background: #333; color: white; transform: translateY(1px); }
+
+        .btn-icon {
+            width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+            border-radius: 6px; background: #1a1a20; border: 1px solid #333; color: #888;
+            transition: all 0.2s;
+        }
+        .btn-icon:active { background: #222; color: white; transform: scale(0.95); }
+        
+        /* UTILS */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* TOAST */
+        #toast-container { position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 200; pointer-events: none; width: max-content; }
+        .toast { background: #1a1a20; border: 1px solid #333; border-left: 3px solid var(--accent); color: white; padding: 12px 20px; border-radius: 4px; font-size: 12px; font-family: monospace; box-shadow: 0 4px 12px rgba(0,0,0,0.5); opacity: 0; transform: translateY(10px); transition: all 0.3s ease; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        
+        /* CRT EFFECT */
+        .crt::before { content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06)); z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none; }
+        .crt { animation: textShadow 1.6s infinite; }
+        
+        /* TOGGLE */
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #222; transition: .3s; border-radius: 24px; border: 1px solid #333; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background: #888; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background: var(--accent); border-color: var(--accent); }
+        input:checked + .slider:before { transform: translateX(20px); background: #000; }
+
+        #failure-halt { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+</head>
+<body id="app-body">
+
+    <div id="crt-layer" class="absolute inset-0 pointer-events-none z-[60] hidden crt"></div>
+
+    <div id="view-library" class="view-section active flex-col absolute inset-0 bg-[#050507] z-50 overflow-y-auto no-scrollbar">
+        <div class="max-w-7xl mx-auto w-full p-6 pb-32">
+            <header class="text-center py-8 md:py-12 space-y-4 md:space-y-6">
+                <div class="flex flex-col items-center gap-2">
+                    <h1 class="text-3xl md:text-6xl font-serif text-white tracking-tight relative inline-block">
+                        Assumption Inspector
+                        <span class="absolute -top-2 -right-6 text-[9px] font-mono text-accent border border-accent/30 px-1.5 py-0.5 rounded bg-accent/5 rotate-12">v2.0</span>
+                    </h1>
+                </div>
+                <p class="text-gray-500 max-w-lg mx-auto text-xs md:text-sm font-mono leading-relaxed">Select a physical law to inspect artifacts caused by causal delay.</p>
+                <div class="relative max-w-md mx-auto group w-full mt-4">
+                    <i class="fas fa-search absolute left-4 top-3.5 text-gray-600"></i>
+                    <input type="text" id="lib-search" oninput="Utils.debounce(App.filterLibrary, 200)()" placeholder="Search library..." 
+                           class="w-full bg-[#0a0a0c] border border-[#222] text-white py-3 pl-10 pr-4 rounded focus:outline-none focus:border-accent transition-all font-mono text-sm shadow-xl h-12">
+                </div>
+            </header>
+            <div id="lib-loading" class="text-center text-gray-600 font-mono text-xs py-10">Initializing Neural Database...</div>
+            <div id="lib-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 px-1 pb-10"></div>
+        </div>
+    </div>
+
+    <div id="view-inspector" class="view-section flex-col absolute inset-0 bg-[#050507] z-40 overflow-hidden">
+        <nav class="h-14 border-b border-[#1f1f23] bg-[#0a0a0c] flex items-center justify-between px-4 shrink-0 z-50 pt-[env(safe-area-inset-top)]">
+            <button onclick="App.goHome()" class="text-xs font-mono text-gray-400 hover:text-white flex items-center gap-2 p-2 -ml-2 h-full">
+                <i class="fas fa-chevron-left"></i> LIBRARY
+            </button>
+            <div class="flex items-center gap-3 overflow-hidden px-2">
+                <span id="active-law-name" class="text-xs font-bold text-gray-200 uppercase tracking-widest truncate">Model</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="cfl-indicator" class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_currentColor]" title="Stability"></span>
+                <button onclick="App.toggleParams()" class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white"><i class="fas fa-sliders-h text-lg"></i></button>
+            </div>
+        </nav>
+
+        <main class="flex-1 overflow-y-auto overflow-x-hidden relative w-full no-scrollbar pb-[env(safe-area-inset-bottom)]">
+            <div class="max-w-6xl mx-auto flex flex-col gap-4 p-3 md:p-4 pb-24">
+                
+                <div class="glass-panel overflow-hidden flex flex-col shadow-2xl relative border-t-2 border-t-accent/50">
+                    <div class="bg-[#0f0f12] border-b border-[#222] px-3 py-2 flex justify-between items-center h-10">
+                        <span id="sim-ontology" class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Physics</span>
+                        <div class="flex gap-3 text-[9px] font-mono tracking-wide">
+                            <span class="text-emerald-500 flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>Ideal</span>
+                            <span class="text-amber-500 flex items-center gap-1"><div class="w-1.5 h-1.5 rounded-full bg-amber-500"></div>Real</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col relative">
+                        <div class="relative w-full aspect-[4/3] md:aspect-[16/9] lg:h-[500px] bg-[#050505] overflow-hidden group cursor-crosshair canvas-container lab-grid">
+                            <canvas id="physCanvas"></canvas>
+                            
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                                <span class="bg-black/60 text-white/90 text-[10px] px-3 py-1.5 rounded backdrop-blur font-mono border border-white/20 shadow-lg tracking-wider">TOUCH TO PERTURB</span>
+                            </div>
+                            <div class="absolute top-2 right-2 flex flex-col items-end pointer-events-none">
+                                <div id="fps-counter" class="text-[9px] font-mono text-gray-600">60 FPS</div>
+                            </div>
+                            <div class="absolute bottom-2 left-2 pointer-events-none">
+                                <span id="sim-time" class="text-[10px] font-mono text-gray-400 bg-black/80 px-2 py-1 rounded backdrop-blur border border-white/10">t = 0.00s</span>
+                            </div>
+                        </div>
+                        
+                        <div class="h-20 md:h-24 bg-[#08080a] border-t border-[#222] relative overflow-hidden">
+                            <canvas id="graphCanvas" class="w-full h-full block opacity-80"></canvas>
+                            <div class="absolute top-1 left-2 text-[8px] font-mono text-gray-600 uppercase">Delta Oscilloscope</div>
+                        </div>
+
+                        <div class="p-3 bg-[#0a0a0c] border-t border-[#222] flex flex-col gap-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <button onclick="Sim.togglePause()" class="btn-icon"><i id="play-icon" class="fas fa-play text-xs"></i></button>
+                                    <button onclick="Sim.hardReset()" class="btn-icon"><i class="fas fa-redo text-xs"></i></button>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="Sim.inject('impulse')" class="btn-action"><i class="fas fa-bolt text-accent"></i> <span class="text-xs">Impulse</span></button>
+                                    <button onclick="Sim.inject('osc')" class="btn-action"><i class="fas fa-wave-square text-blue-400"></i> <span class="text-xs">Osc</span></button>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-col gap-1 w-full pt-1 px-1">
+                                <div class="flex justify-between text-[10px] text-gray-500 font-mono uppercase">
+                                    <span>Signal Delay (τ)</span><span id="insp-delay-val" class="text-accent font-bold">0.50s</span>
+                                </div>
+                                <div class="relative h-10 flex items-center group">
+                                    <input type="range" id="law-slider" min="0" max="100" value="25" 
+                                           oninput="App.updateDelayVisuals(this.value)" 
+                                           onchange="Sim.updateDelay(this.value)" 
+                                           class="relative z-10">
+                                    <div class="absolute left-0 right-0 h-1 bg-gradient-to-r from-emerald-900/40 via-amber-900/40 to-red-900/40 rounded pointer-events-none top-1/2 -translate-y-1/2"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="glass-panel p-4 md:p-5 border-l-2 border-l-accent flex flex-col">
+                        <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2 font-mono flex items-center gap-2">
+                            <i class="fas fa-align-left text-accent"></i>The Friction
+                        </div>
+                        <p id="insp-truth" class="text-gray-300 italic font-serif text-sm leading-relaxed"></p>
+                    </div>
+                    
+                    <div class="glass-panel p-4 md:p-5 border-l-2 border-l-blue-500/50 flex flex-col">
+                        <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2 font-mono flex items-center gap-2">
+                            <i class="fas fa-square-root-alt text-blue-400"></i>Formalism
+                        </div>
+                        <div id="insp-latex" class="text-base text-white mb-2 overflow-x-auto whitespace-nowrap no-scrollbar pb-2"></div>
+                        <div class="mt-auto pt-3 border-t border-white/5 space-y-1">
+                            <div class="text-[8px] text-gray-600 font-mono uppercase tracking-widest">Artifacts</div>
+                            <div id="list-artifacts" class="text-[10px] text-gray-400 font-mono grid grid-cols-2 gap-1"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="teacher-panel" class="glass-panel p-4 md:p-5 bg-gradient-to-r from-[#0a0a0c] to-[#0f0f15] border-l-2 border-l-purple-900/50 hidden">
+                    <h3 class="text-[9px] font-bold text-purple-400 uppercase tracking-widest font-mono mb-2 flex items-center gap-2"><i class="fas fa-lightbulb"></i>Pedagogical Note</h3>
+                    <p id="teacher-note" class="text-xs text-gray-400 leading-relaxed font-serif"></p>
+                </div>
+            </div>
+
+            <div id="param-drawer" class="fixed inset-y-0 right-0 w-[300px] max-w-[85vw] bg-[#0c0c0f] border-l border-[#222] transform translate-x-full transition-transform duration-300 z-[100] shadow-2xl flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+                <div class="p-4 border-b border-[#222] flex justify-between items-center bg-[#0f0f12]">
+                    <h3 class="text-xs font-bold text-white uppercase tracking-widest">Controls</h3>
+                    <button onclick="App.toggleParams()" class="text-gray-500 hover:text-white p-2 text-lg w-10 h-10"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-5 space-y-6">
+                    <div class="grid grid-cols-1 gap-3">
+                        <button onclick="App.enterLab()" class="bg-accent/10 border border-accent/30 text-accent p-4 rounded-md text-[10px] font-bold uppercase tracking-wider hover:bg-accent hover:text-black transition-all flex items-center justify-center gap-2">
+                            <i class="fas fa-microscope text-lg"></i> Full Lab Mode
+                        </button>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="Export.toPDF()" class="btn-action justify-center py-3"><i class="fas fa-file-pdf"></i> PDF</button>
+                            <button onclick="Export.toCSV()" class="btn-action justify-center py-3"><i class="fas fa-file-csv"></i> CSV</button>
+                        </div>
+                    </div>
+
+                    <div class="h-px bg-[#222]"></div>
+
+                    <div class="space-y-4">
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-[10px] text-gray-400 font-mono"><span>COUPLING (K)</span><span id="param-display" class="text-white">1.0x</span></div>
+                            <input type="range" min="0.1" max="3.0" step="0.1" value="1.0" oninput="Sim.paramAdjust(this.value)">
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded bg-[#15151a] border border-[#222] space-y-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-gray-300 font-medium flex items-center gap-2"><i class="fas fa-graduation-cap text-purple-500"></i>Teacher Mode</span>
+                            <label class="toggle-switch"><input type="checkbox" onchange="App.toggleTeacherMode(this.checked)"><span class="slider"></span></label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-gray-300 font-medium flex items-center gap-2"><i class="fas fa-tv text-green-500"></i>CRT Effect</span>
+                            <label class="toggle-switch"><input type="checkbox" onchange="App.toggleCRT(this.checked)"><span class="slider"></span></label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-gray-300 font-medium flex items-center gap-2"><i class="fas fa-project-diagram text-blue-500"></i>Phase Space</span>
+                            <label class="toggle-switch"><input type="checkbox" onchange="Renderer.togglePhaseSpace()"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="view-lab" class="view-section flex-col absolute inset-0 bg-black z-30">
+        <header class="h-14 border-b border-[#222] bg-[#0a0a0c] flex items-center justify-between px-4 z-50 pt-[env(safe-area-inset-top)]">
+            <button onclick="App.goInspector()" class="text-xs font-mono text-accent flex items-center gap-2 hover:text-white p-2 -ml-2 h-full min-w-[80px]"><i class="fas fa-arrow-left"></i> RETURN</button>
+            <span class="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Laboratory</span>
+            <div class="w-10"></div>
+        </header>
+        <main class="flex-1 relative touch-none cursor-crosshair overflow-hidden">
+            <canvas id="mainCanvas"></canvas>
+            <div class="absolute top-4 left-4 pointer-events-none flex flex-col gap-2">
+                <div class="flex flex-col gap-1 text-[10px] font-mono bg-black/80 backdrop-blur p-3 rounded border border-white/10 w-44 shadow-xl">
+                    <div class="text-gray-500 text-[9px] mb-1 tracking-widest uppercase border-b border-white/10 pb-1 flex justify-between">
+                        <span>Telemetry</span> <span id="lab-fps">60</span>
+                    </div>
+                    <div class="flex justify-between text-emerald-500 font-bold"><span>IDEAL</span><span id="lab-ideal-val">0.00</span></div>
+                    <div class="flex justify-between text-amber-500 font-bold"><span>REAL</span><span id="lab-real-val">0.00</span></div>
+                    <div class="flex justify-between text-gray-300 border-t border-white/10 pt-1 mt-1"><span>STABILITY</span><span id="lab-stability-val">100%</span></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+    
+    <div id="failure-halt" class="absolute inset-0 bg-red-950/95 backdrop-blur-md flex flex-col items-center justify-center hidden z-[100] p-6 text-center animate-in fade-in duration-300">
+        <div class="text-6xl text-red-500 mb-6 animate-pulse"><i class="fas fa-biohazard"></i></div>
+        <div class="text-white text-2xl md:text-3xl font-bold uppercase mb-2 tracking-tighter">System Divergence</div>
+        <p class="text-red-200 mb-8 max-w-xs md:max-w-md font-mono text-xs">Mathematical instability detected. The system has collapsed due to causal loop feedback.</p>
+        <button onclick="Sim.hardReset()" class="bg-white/10 border border-white/20 px-8 py-4 text-sm text-white uppercase font-bold rounded hover:bg-white/20 hover:scale-105 transition-all">Reboot System</button>
+    </div>
+
+<script>
+/* ASSUMPTION INSPECTOR v2.0 - SELF HEALING SYSTEM */
+
+const DB = {
+    "gravity": { name: "Retarded Gravitation", timeType: "Continuous", artifacts: ["Phantom Torque", "Spiral Decay"], latex: "F(t) \\propto \\frac{GM}{|r(t-\\tau)|^2}", truth: "Gravity pulls towards where the object WAS, not where it is.", teacher: "Laplace calculated gravity speed > 10^7c to avoid this instability." },
+    "pid": { name: "PID Controller", timeType: "Continuous", artifacts: ["Overshoot", "Ringing"], latex: "u(t) = K_p e(t-\\tau) + K_d \\dot{e}(t-\\tau)", truth: "Sensor lag creates a feedback loop that amplifies noise.", teacher: "The #1 cause of real-world robot oscillation." },
+    "hookes": { name: "Harmonic Oscillator", timeType: "Continuous", artifacts: ["Energy Injection"], latex: "\\ddot{x} = -k x(t-\\tau)", truth: "Delayed restoring force pumps energy into the system.", teacher: "Self-excitation causes dangerous machine chatter." },
+    "boids": { name: "Flocking (Boids)", timeType: "Agent", artifacts: ["Collision", "Disbandment"], latex: "\\vec{v}_i = \\sum f(\\vec{x}_j(t-\\tau))", truth: "Reaction time prevents tight formations, causing crashes.", teacher: "Why birds don't fly as close as mathematically possible." },
+    "traffic": { name: "Traffic Waves", timeType: "Hybrid", artifacts: ["Phantom Jams"], latex: "\\dot{v}_n \\propto (V_{opt} - v_n(t-\\tau))", truth: "Brake light delay causes stop-and-go waves upstream.", teacher: "Explains traffic jams with no accidents." },
+    "predator": { name: "Lotka-Volterra", timeType: "Continuous", artifacts: ["Expanding Cycles"], latex: "\\dot{x} = x(a - by(t-\\tau))", truth: "Reproduction lag creates expanding death spirals.", teacher: "Real ecosystems are less stable than simple math predicts." },
+    "heat": { name: "Heat Diffusion", timeType: "Field", artifacts: ["Wave-like Heat"], latex: "\\partial_t u = \\alpha \\nabla^2 u(t-\\tau)", truth: "Standard Heat Eq implies infinite speed; delay creates waves.", teacher: "Heat acts like a wave at very short time scales." },
+    "market": { name: "Market Cycle", timeType: "Discrete", artifacts: ["Boom/Bust"], latex: "S_t = D(P_{t-\\tau})", truth: "Production lag causes massive boom-bust cycles.", teacher: "Explains the 'Hog Cycle' in economics." },
+    "kuramoto": { name: "Kuramoto Sync", timeType: "Network", artifacts: ["Chimera States"], latex: "\\dot{\\theta}_i = \\omega + K \\sum \\sin(\\theta_j(t-\\tau) - \\theta_i)", truth: "Delay prevents full synchronization of the network.", teacher: "Why power grids can fail if sensors are too slow." },
+    "logistic": { name: "Logistic Map", timeType: "Discrete", artifacts: ["Chaos Onset"], latex: "x_{n+1} = r x_n (1-x_n)", truth: "Discrete feedback paths create chaos naturally.", teacher: "The foundation of Chaos Theory." },
+    "reaction": { name: "Reaction-Diffusion", timeType: "Field", artifacts: ["Turing Patterns"], latex: "\\partial_t u = D_u \\Delta u + f(u,v_{t-\\tau})", truth: "Delay in chemical inhibition creates zebra stripes.", teacher: "How biology creates patterns from noise." }
+};
+
+const Utils = { 
+    debounce: (f, w) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => f.apply(this, a), w); }; },
+    lerp: (a, b, t) => a + (b - a) * t,
+    clamp: (v, min, max) => Math.max(min, Math.min(max, v))
+};
+
+class HistoryBuffer {
+    constructor(size, initialVal) {
+        this.size = size;
+        this.data = new Array(size).fill(null).map(() => Sim.clone(initialVal));
+        this.head = 0;
+    }
+    push(val) {
+        this.head = (this.head + 1) % this.size;
+        Sim.copy(this.data[this.head], val);
+    }
+    get(framesAgo) {
+        if(framesAgo <= 0) return this.data[this.head];
+        const rawIdx = this.head - framesAgo;
+        let idx1 = Math.floor(rawIdx) % this.size; if(idx1 < 0) idx1 += this.size;
+        let idx2 = Math.ceil(rawIdx) % this.size; if(idx2 < 0) idx2 += this.size;
+        const alpha = framesAgo % 1;
+        if(alpha < 0.001) return this.data[idx1];
+        return Sim.lerpState(this.data[idx2], this.data[idx1], alpha); 
+    }
+}
+
+const DataLog = {
+    buffer: new Float32Array(3000), head: 0,
+    reset() { this.buffer.fill(0); this.head = 0; },
+    push(t, a, b) {
+        if(!isFinite(t)) return;
+        const i = this.head * 3; 
+        this.buffer[i] = a; this.buffer[i+1] = b; this.buffer[i+2] = a-b;
+        this.head = (this.head+1) % 1000;
+    },
+    getTrace() { return { buf: this.buffer, head: this.head }; }
+};
+
+const Sim = {
+    running: false, t: 0, dt: 0.016, activeKey: null, 
+    state: {A:null, B:null}, history: null,
+    config: { delay: 0.5, param: 1.0, stepsPerFrame: 2 }, 
+    mouse: { x: 0, y: 0, down: false }, signal: { type: null, ttl: 0 },
+    
+    clone(o) { 
+        if(typeof o !== 'object' || o === null) return o;
+        if(o instanceof Float32Array) return new Float32Array(o);
+        if(Array.isArray(o)) return o.map(x => this.clone(x));
+        const n = {}; for(let k in o) n[k] = this.clone(o[k]); return n;
+    },
+    copy(tgt, src) {
+        if(!tgt || !src) return;
+        if(src instanceof Float32Array) { tgt.set(src); return; }
+        if(Array.isArray(src)) { src.forEach((x,i)=>this.copy(tgt[i], x)); return; }
+        for(let k in src) if(typeof src[k]==='object') this.copy(tgt[k], src[k]); else tgt[k]=src[k];
+    },
+    lerpState(s1, s2, t) {
+        if(typeof s1 === 'number') return s1 + (s2-s1)*t;
+        if(s1 instanceof Float32Array) {
+            const res = new Float32Array(s1.length);
+            for(let i=0; i<s1.length; i++) res[i] = s1[i] + (s2[i]-s1[i])*t;
+            return res;
+        }
+        if(Array.isArray(s1)) return s1.map((v,i) => this.lerpState(v, s2[i], t));
+        const res = {}; for(let k in s1) res[k] = this.lerpState(s1[k], s2[k], t); return res;
+    },
+
+    makeState(k) {
+        const r = Math.random;
+        switch(k) {
+            case 'gravity': return {x:100, y:0, vx:0, vy:3.5};
+            case 'pid': return {x:0, v:0, err:0, integ:0};
+            case 'hookes': return {x:100, v:0};
+            case 'boids': return Array(15).fill(0).map(()=>({x:(r()-0.5)*200, y:(r()-0.5)*200, vx:(r()-0.5)*20, vy:(r()-0.5)*20}));
+            case 'traffic': return Array(20).fill(0).map((_,i)=>({x:i*5, v:20}));
+            case 'market': return {P:50, S:50, D:50};
+            case 'logistic': return {x:0.1};
+            case 'predator': return {x:10, y:5};
+            case 'kuramoto': return Array(12).fill(0).map(()=>({th:r()*6.28, w:0.5+r()}));
+            case 'heat': case 'reaction': return {u: new Float32Array(60).map((_,i)=> (k==='reaction'?r():Math.exp(-(i-30)**2/20))), v: new Float32Array(60).fill(0)};
+            default: return {x:0, v:0};
+        }
+    },
+
+    init(keepTime=false) {
+        if(!keepTime) { this.t=0; DataLog.reset(); }
+        const k = this.activeKey;
+        this.state.A = this.makeState(k); this.state.B = this.makeState(k);
+        this.history = new HistoryBuffer(Math.ceil(5 * 60 * this.config.stepsPerFrame), this.state.B);
+        this.signal = { type: null, ttl: 0 };
+        document.getElementById('failure-halt').classList.add('hidden');
+        
+        const m = DB[k];
+        document.getElementById('sim-ontology').innerText = m.timeType;
+        document.getElementById('list-artifacts').innerHTML = m.artifacts.map(a=>`<div>• ${a}</div>`).join('');
+        document.getElementById('teacher-note').innerText = m.teacher;
+        try { katex.render(m.latex, document.getElementById('insp-latex'), {displayMode:true, throwOnError:false}); } catch(e){}
+    },
+
+    start() { if(!this.running) { this.running=true; this.lastFrameTime = performance.now(); this.loop(); document.getElementById('play-icon').className='fas fa-pause'; document.getElementById('law-slider').parentElement.classList.add('opacity-50'); } },
+    stop() { this.running=false; document.getElementById('play-icon').className='fas fa-play'; document.getElementById('law-slider').parentElement.classList.remove('opacity-50'); },
+    togglePause() { this.running ? this.stop() : this.start(); },
+    hardReset() { this.stop(); this.init(); this.start(); },
+    
+    updateDelay(val) { this.config.delay = (val/100)*2; document.getElementById('insp-delay-val').innerText = this.config.delay.toFixed(2)+'s'; },
+    paramAdjust(v) { this.config.param = parseFloat(v); document.getElementById('param-display').innerText = parseFloat(v).toFixed(1)+'x'; },
+    inject(type) { if(!this.running) this.start(); this.signal = { type: type, ttl: type === 'impulse' ? 6 : 180 }; App.toast(`Signal: ${type.toUpperCase()}`); },
+
+    solve(s, inS, isIdeal) {
+        const k = this.activeKey, p = this.config.param, dt = this.dt / this.config.stepsPerFrame;
+        let force = 0;
+        if(this.signal.ttl > 0 && !isIdeal) {
+            if(this.signal.type === 'impulse') force = 100;
+            else if(this.signal.type === 'osc') force = Math.sin(this.t * 8) * 30;
+            this.signal.ttl--;
+        }
+        if(this.mouse.down && this.running && !isIdeal) force += (Math.random()-0.5)*100;
+
+        if(k==='gravity') {
+            const r = Math.sqrt(inS.x**2 + inS.y**2);
+            const F = -5000 * p / (Math.pow(Math.max(r,10), 3) + 1);
+            s.vx += (F * inS.x + (force?force/10:0)) * dt; s.vy += (F * inS.y) * dt;
+            s.x += s.vx * dt; s.y += s.vy * dt;
+        }
+        else if(k==='pid') {
+            const err = 100 - inS.x;
+            const dedt = (err - s.err) / dt;
+            const u = (p*2 * err) + (p*0.5 * s.integ) + (p*4 * dedt);
+            s.integ += err * dt; s.err = err;
+            s.v += (u - s.v*0.1 + force) * dt; s.x += s.v * dt;
+        }
+        else if(k==='hookes') {
+            const F = -40 * (inS.x - 100);
+            s.v += (F - s.v*0.5 + force*5)*dt*p; s.x += s.v * dt;
+        }
+        else if(k==='boids') {
+            const center = {x:0, y:0}, vel = {x:0, y:0};
+            if(isIdeal) s.forEach(b => { center.x+=b.x; center.y+=b.y; vel.x+=b.vx; vel.y+=b.vy; });
+            else inS.forEach(b => { center.x+=b.x; center.y+=b.y; vel.x+=b.vx; vel.y+=b.vy; });
+            const N = s.length; center.x/=N; center.y/=N; vel.x/=N; vel.y/=N;
+            s.forEach((b, i) => {
+                let sx=0, sy=0;
+                s.forEach(b2 => { const dx=b.x-b2.x, dy=b.y-b2.y, d=Math.sqrt(dx*dx+dy*dy); if(d>0 && d<20) { sx += dx/d; sy += dy/d; } });
+                b.vx += (sx*2 + (isIdeal?center.x:center.x+(Math.random()-0.5)*5 - b.x)*0.01 + (vel.x-b.vx)*0.05 - b.x*0.005 + (i===0?force/5:0)) * p * 60 * dt;
+                b.vy += (sy*2 + (center.y - b.y)*0.01 + (vel.y - b.vy)*0.05 - b.y*0.005) * p * 60 * dt;
+                const spd = Math.sqrt(b.vx**2 + b.vy**2); if(spd > 60) { b.vx = (b.vx/spd)*60; b.vy = (b.vy/spd)*60; }
+                b.x += b.vx * dt; b.y += b.vy * dt;
+            });
+        }
+        else if(k==='heat') {
+            for(let i=1; i<59; i++) {
+                const lap = inS.u[i+1] + inS.u[i-1] - 2*inS.u[i];
+                s.v[i] += (lap - 0.1*s.v[i] + (i===30?force/10:0)) * dt * 50 * p; s.u[i] += s.v[i] * dt;
+            }
+        }
+        else if(k==='reaction') {
+            for(let i=1; i<59; i++) {
+                const uvv = s.u[i] * inS.v[i] * inS.v[i];
+                s.u[i] += (0.2*(s.u[i+1]+s.u[i-1]-2*s.u[i]) - uvv + 0.04*(1-s.u[i])) * dt * 10 * p;
+                s.v[i] += (0.1*(s.v[i+1]+s.v[i-1]-2*s.v[i]) + uvv - 0.1*s.v[i]) * dt * 10 * p;
+            }
+            if(Math.random()<0.05) s.v[30] += 0.1;
+        }
+        else if(k==='traffic') {
+            s.forEach((car, i) => {
+                const nextCar = inS[(i+1)%s.length]; if(!nextCar) return;
+                let dist = (nextCar.x - (isIdeal ? s[i].x : inS[i].x)); if(dist < 0) dist += 100;
+                car.v += (Math.max(0, Math.min(25, (dist - 5)*2)) - car.v) * dt * 2 * p;
+                car.x = (car.x + car.v * dt) % 100;
+            });
+        }
+        else if(k==='market') {
+             const S = Math.pow(inS.P/5, 1.5) * p; 
+             s.P = Math.max(1, s.P + (100 - Math.pow(s.P/5, 1.5) - S) * 0.5 * dt); s.S = S;
+        }
+        else if(k==='logistic') { if(Math.random() < 0.1) s.x = (3.5 + p*0.4) * inS.x * (1 - inS.x); }
+        else if(k==='kuramoto') {
+            s.forEach((osc, i) => {
+                let coupling = 0; const others = isIdeal ? s : inS;
+                others.forEach(o => coupling += Math.sin(o.th - osc.th));
+                osc.th += (osc.w + (p * coupling / s.length)) * dt;
+            });
+        }
+        else if(k==='predator') {
+            s.x += (s.x * (2 - 1 * (isIdeal?s.y:inS.y))) * dt * p;
+            s.y += (s.y * (1 * (isIdeal?s.x:inS.x) - 3)) * dt * p;
+        }
+    },
+
+    step() {
+        const steps = this.config.stepsPerFrame;
+        for(let i=0; i<steps; i++) {
+            const delayFrames = (this.config.delay / this.dt) * steps;
+            const pastState = this.history.get(delayFrames);
+            this.solve(this.state.A, this.state.A, true);
+            this.solve(this.state.B, pastState, false);
+            this.history.push(this.state.B);
+            this.t += (this.dt / steps);
+        }
+        
+        const vA = this.getScalar(this.state.A), vB = this.getScalar(this.state.B);
+        if(!isFinite(vB) || Math.abs(vB) > 10000) { this.stop(); document.getElementById('failure-halt').classList.remove('hidden'); return; }
+        DataLog.push(this.t, vA, vB);
+        this.updateUI(vA, vB);
+    },
+
+    getScalar(s) {
+        if(!s) return 0;
+        if(s.x!==undefined && s.vx===undefined) return s.x;
+        if(s.x!==undefined) return s.x;
+        if(s.P!==undefined) return s.P;
+        if(Array.isArray(s)) { if(s[0].x!==undefined) return s.reduce((a,b)=>a+b.v,0)/s.length; if(s[0].th!==undefined) return Math.sin(s[0].th); }
+        if(s.u) return s.u[30];
+        return 0;
+    },
+
+    updateUI(vA, vB) {
+        if(Math.floor(this.t*60)%10 !== 0) return;
+        const diff = Math.abs(vA - vB);
+        const stab = Math.max(0, 100 - diff * (this.activeKey==='gravity'?0.2:2));
+        document.getElementById('sim-time').innerText = `t = ${this.t.toFixed(2)}s`;
+        document.getElementById('lab-ideal-val').innerText = vA.toFixed(2);
+        document.getElementById('lab-real-val').innerText = vB.toFixed(2);
+        const elStab = document.getElementById('lab-stability-val');
+        if(elStab) { elStab.innerText = stab.toFixed(0) + '%'; elStab.style.color = stab < 50 ? '#ef4444' : (stab < 80 ? '#f59e0b' : '#10b981'); }
+        document.getElementById('cfl-indicator').className = stab > 80 ? 'cfl-light cfl-green' : 'cfl-light cfl-red';
+    },
+
+    loop() {
+        if(!this.running) return;
+        const now = performance.now();
+        // Cap simulation speed (prevent 120hz speeding up sim)
+        const elapsed = now - this.lastFrameTime;
+        if(elapsed > 15) { 
+            this.step();
+            Renderer.draw();
+            this.lastFrameTime = now - (elapsed % 15);
+            
+            if(!this.lastFps) this.lastFps = now;
+            if(now - this.lastFps > 500) {
+                const fps = Math.round(1000/elapsed);
+                document.getElementById('fps-counter').innerText = fps + " FPS";
+                document.getElementById('lab-fps').innerText = fps;
+                this.lastFps = now;
+            }
+        }
+        requestAnimationFrame(()=>this.loop());
+    }
+};
+
+const Renderer = {
+    showPhase: false,
+    togglePhaseSpace() { this.showPhase = !this.showPhase; },
+
+    draw() {
+        const c = document.getElementById('view-lab').classList.contains('active') ? document.getElementById('mainCanvas') : document.getElementById('physCanvas');
+        const cg = document.getElementById('graphCanvas');
+        if(!c || !c.offsetParent) return;
+
+        // Retina Support
+        const dpr = window.devicePixelRatio || 1;
+        if(c.width !== c.clientWidth * dpr) { c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr; }
+        if(cg && cg.width !== cg.clientWidth * dpr) { cg.width = cg.clientWidth * dpr; cg.height = cg.clientHeight * dpr; }
+
+        const ctx = c.getContext('2d');
+        const w = c.width, h = c.height, cx = w/2, cy = h/2;
+        ctx.fillStyle = this.showPhase ? 'rgba(5,5,7,0.1)' : '#050507'; ctx.fillRect(0,0,w,h);
+        
+        const k = Sim.activeKey;
+        if(!Sim.state.A) return;
+
+        ctx.save(); ctx.translate(cx, cy); ctx.scale(dpr, dpr); 
+
+        const drawEntity = (s, col, isGhost) => {
+            ctx.fillStyle = col; ctx.strokeStyle = col;
+            if(k === 'gravity') { ctx.beginPath(); ctx.arc(s.x, s.y, isGhost?6:4, 0, 7); ctx.fill(); } 
+            else if(k === 'pid') { ctx.fillRect(-120, -10, 240, 20); ctx.fillStyle = '#fff'; ctx.fillRect(s.x-100-5, -15, 10, 30); }
+            else if(k === 'hookes') { ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(s.x-100, 0); ctx.stroke(); ctx.beginPath(); ctx.arc(s.x-100, 0, 8, 0, 7); ctx.fill(); }
+            else if(k === 'boids') { s.forEach(b => { ctx.beginPath(); const ang = Math.atan2(b.vy, b.vx); ctx.moveTo(b.x + Math.cos(ang)*5, b.y + Math.sin(ang)*5); ctx.lineTo(b.x + Math.cos(ang+2.5)*4, b.y + Math.sin(ang+2.5)*4); ctx.lineTo(b.x + Math.cos(ang-2.5)*4, b.y + Math.sin(ang-2.5)*4); ctx.fill(); }); }
+            else if(k === 'traffic') { const r = 80; s.forEach(c => { const ang = (c.x/100)*Math.PI*2; ctx.beginPath(); ctx.arc(Math.cos(ang)*r, Math.sin(ang)*r, 4, 0, 7); ctx.fill(); }); ctx.strokeStyle = '#333'; ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.stroke(); }
+            else if(k === 'market') { const pH = (s.P - 50)*2; ctx.fillRect(-50, 0, 40, -pH); ctx.fillText("P", -40, 20); ctx.beginPath(); ctx.arc(50, -s.S, 5, 0, 7); ctx.fill(); }
+            else if(s.u) { const bw = 200/60; s.u.forEach((val, i) => { ctx.globalAlpha = isGhost?0.5:1; const h = val*50; ctx.fillRect((i-30)*bw, 50, bw+0.5, -h); ctx.globalAlpha = 1; }); }
+        };
+
+        if(this.showPhase) {
+            const plot = (s, col) => {
+                let x=0, y=0;
+                if(s.x!==undefined && s.v!==undefined) { x=(s.x-(k==='gravity'?100:0)); y=s.v*10; }
+                else if(s.P!==undefined) { x=(s.P-50)*2; y=(s.S-50)*2; }
+                else return;
+                ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, -y, 2, 0, 7); ctx.fill();
+            };
+            plot(Sim.state.A, '#10b981'); plot(Sim.state.B, '#f59e0b');
+        } else {
+            ctx.globalAlpha = 0.4; drawEntity(Sim.state.A, '#10b981', true);
+            ctx.globalAlpha = 1.0; drawEntity(Sim.state.B, '#f59e0b', false);
+        }
+        ctx.restore();
+
+        if(cg) this.drawGraph(cg);
+    },
+
+    drawGraph(c) {
+        const ctx = c.getContext('2d');
+        const w = c.width, h = c.height, dpr = window.devicePixelRatio || 1;
+        ctx.clearRect(0,0,w,h);
+        
+        const {buf, head} = DataLog.getTrace();
+        const len = 1000;
+        const stepX = w / len; // physical pixels per step
+        
+        ctx.lineWidth = 2 * dpr;
+        
+        const plotLine = (offset, color, scale=1) => {
+            ctx.beginPath(); ctx.strokeStyle = color;
+            let first = true;
+            for(let i=0; i<len; i++) {
+                const idx = ((head + i) % len) * 3;
+                const val = buf[idx + offset];
+                if(val === 0 && i < 10) continue;
+                let y = (h/2) - (val * (Sim.activeKey==='gravity'?0.2:2) * scale * dpr); // scale by dpr for height
+                y = Utils.clamp(y, 5, h-5);
+                if(first) { ctx.moveTo(i*stepX, y); first=false; } else ctx.lineTo(i*stepX, y);
+            }
+            ctx.stroke();
+        };
+
+        plotLine(0, '#10b98144'); plotLine(1, '#f59e0b'); plotLine(2, '#ef4444', 2);
+        ctx.strokeStyle = '#333'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+    }
+};
+
+const App = {
+    goHome() { Sim.stop(); toggleView('view-library'); },
+    enterLab() { toggleView('view-lab'); Renderer.draw(); },
+    goInspector() { toggleView('view-inspector'); Renderer.draw(); },
+    updateDelayVisuals(v) { document.getElementById('insp-delay-val').innerText = ((v/100)*2).toFixed(2)+'s (Release)'; },
+    toggleParams() { document.getElementById('param-drawer').classList.toggle('translate-x-full'); },
+    toggleTeacherMode(a) { document.getElementById('teacher-panel').classList.toggle('hidden', !a); },
+    toggleCRT(a) { document.getElementById('crt-layer').classList.toggle('hidden', !a); },
+    loadModel(k) { Sim.stop(); toggleView('view-inspector'); Sim.activeKey = k; Sim.init(); Sim.start(); const m = DB[k]; document.getElementById('active-law-name').innerText = m.name; document.getElementById('insp-truth').innerText = `"${m.truth}"`; },
+    
+    filterLibrary() {
+        if(!window.DB) { setTimeout(App.filterLibrary, 200); return; } // Safety check
+        const grid = document.getElementById('lib-grid'); grid.innerHTML = '';
+        const loading = document.getElementById('lib-loading'); if(loading) loading.style.display = 'none';
+        
+        const q = document.getElementById('lib-search').value.toLowerCase();
+        Object.entries(DB).forEach(([k, m]) => {
+            if(q && !m.name.toLowerCase().includes(q) && !m.artifacts.join('').toLowerCase().includes(q)) return;
+            const div = document.createElement('div'); div.className = 'lib-card group'; 
+            div.onclick = () => App.loadModel(k);
+            div.innerHTML = `<div class="flex justify-between mb-3"><span class="text-[9px] font-bold text-accent border border-accent/30 px-2 py-1 rounded bg-accent/5 uppercase tracking-wider">${m.timeType}</span></div><h3 class="text-base font-bold text-gray-100 mb-2 font-serif group-hover:text-white transition-colors">${m.name}</h3><div class="flex flex-wrap gap-1 mt-2">${m.artifacts.map(a => `<span class="text-[9px] bg-[#1a1a20] text-gray-400 px-2 py-1 rounded border border-[#333]">${a}</span>`).join('')}</div>`;
+            grid.appendChild(div);
+        });
+    },
+
+    toast(msg) {
+        const t = document.createElement('div'); t.className = 'toast'; t.innerText = msg;
+        document.getElementById('toast-container').appendChild(t);
+        requestAnimationFrame(() => t.classList.add('show'));
+        setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
+    }
+};
+
+const Export = {
+    toPDF() {
+        App.toast("Generating Report...");
+        setTimeout(() => {
+            if(!window.jspdf) return;
+            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            const m = DB[Sim.activeKey];
+            doc.setFillColor(5,5,7); doc.rect(0,0,210,297,'F');
+            doc.setTextColor(245, 158, 11); doc.setFontSize(22); doc.text(m.name, 14, 25);
+            doc.setTextColor(200); doc.setFontSize(12); doc.text("Causal Delay Analysis Report", 14, 35);
+            doc.setFontSize(10); doc.text(`Assumption: "${m.truth}"`, 14, 45);
+            const can = document.getElementById('graphCanvas');
+            if(can) { const img = can.toDataURL("image/png"); doc.addImage(img, 'PNG', 14, 55, 180, 40); }
+            doc.save(`Analysis_${Sim.activeKey}.pdf`);
+            App.toast("PDF Downloaded.");
+        }, 100);
+    },
+    toCSV() {
+        const d = DataLog.buffer; const head = DataLog.head;
+        let csv = "TimeStep,Ideal,Real,Delta\n";
+        for(let i=0; i<1000; i++) {
+            const idx = ((head + i) % 1000) * 3;
+            if(d[idx]!==0) csv += `${i},${d[idx].toFixed(4)},${d[idx+1].toFixed(4)},${d[idx+2].toFixed(4)}\n`;
+        }
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const a = document.createElement('a'); a.href = window.URL.createObjectURL(blob); a.download = `data_${Sim.activeKey}.csv`; a.click();
+        App.toast("CSV Exported.");
+    }
+};
+
+function toggleView(id) {
+    document.querySelectorAll('.view-section').forEach(e => e.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    if(id==='view-library') { document.getElementById('param-drawer').classList.remove('translate-x-0'); document.getElementById('param-drawer').classList.add('translate-x-full'); }
+}
+
+const attachInput = (id) => {
+    const c = document.getElementById(id);
+    const handler = (e) => {
+        // Prevent default only if interacting with canvas physics to stop scrolling
+        // We use passive: false to allow preventDefault
+        if(e.type === 'touchmove') e.preventDefault(); 
+        const rect = c.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        Sim.mouse.x = (clientX - rect.left);
+        Sim.mouse.y = (clientY - rect.top);
+        if(e.type === 'mousedown' || e.type === 'touchstart') Sim.mouse.down = true;
+        if(e.type === 'mouseup' || e.type === 'touchend') Sim.mouse.down = false;
+    };
+    ['mousedown','mousemove','mouseup','touchstart','touchmove','touchend'].forEach(evt => c.addEventListener(evt, handler, {passive:false}));
+};
+
+// Safe Initialization
+document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(() => {
+        App.filterLibrary();
+        attachInput('physCanvas');
+        attachInput('mainCanvas');
+    }, 100);
+});
+
+document.addEventListener('visibilitychange', () => { if(document.hidden) Sim.stop(); });
+</script>
+</body>
+</html>
