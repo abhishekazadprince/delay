@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#050507">
     <meta name="description" content="Scientific inspection tool for time-delayed causal systems.">
-    <title>Assumption Inspector v2.3 [Merged]</title>
+    <title>Assumption Inspector v2.3 [Sci-Export]</title>
+    <!-- PDF GENERATION LIBRARY -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
         /* --- CORE VARIABLES --- */
@@ -172,7 +174,7 @@
         <div style="max-width: 800px; margin: 0 auto; padding-top: 40px; padding-bottom: 100px;">
             <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="font-size: 2.2rem; margin-bottom: 10px; font-weight: 300; letter-spacing: -1px;">Assumption Inspector</h1>
-                <p style="color: var(--text-muted); font-size: 12px; font-family: monospace;">v2.3 MERGED EDITION</p>
+                <p style="color: var(--text-muted); font-size: 12px; font-family: monospace;">v2.3 [Sci-Export Edition]</p>
                 <div style="margin-top: 20px;">
                     <input type="text" id="lib-search" placeholder="Search (e.g. Gravity, Market)..." oninput="window.App.debouncedFilter()">
                 </div>
@@ -274,6 +276,14 @@
                 <div class="flex justify-between items-center"><span style="font-size: 12px; color: #ccc;">Teacher Mode</span><label class="toggle"><input type="checkbox" onchange="window.App.toggleTeacher(this.checked)"><span class="slider"></span></label></div>
                 <div class="flex justify-between items-center"><span style="font-size: 12px; color: #ccc;">Phase Space</span><label class="toggle"><input type="checkbox" onchange="window.Renderer.togglePhase(this.checked)"><span class="slider"></span></label></div>
                 <div class="flex justify-between items-center"><span style="font-size: 12px; color: #ccc;">CRT Effect</span><label class="toggle"><input type="checkbox" onchange="window.App.toggleCRT(this.checked)"><span class="slider"></span></label></div>
+                
+                <!-- NEW EXPORT SECTION -->
+                <div style="height: 1px; background: var(--border); margin: 10px 0;"></div>
+                <div style="font-size: 10px; color: var(--text-muted); margin-bottom:4px;">SCIENTIFIC EXPORT</div>
+                <div class="flex gap-2">
+                    <button onclick="window.Exporter.downloadCSV()" class="btn" style="flex:1; background: #064e3b; border-color: #059669; color: #a7f3d0;">CSV DATA</button>
+                    <button onclick="window.Exporter.generatePDF()" class="btn" style="flex:1; background: #4338ca; border-color: #4f46e5; color: #c7d2fe;">PDF REPORT</button>
+                </div>
             </div>
         </div>
     </div>
@@ -297,6 +307,7 @@
  * 1. Logic (Sim, DB) taken from 121.html (Scientific Priority)
  * 2. UI/Events taken from 123.html (Stability/Mobile Priority)
  * 3. Bug Fixes: PointerEvents, ResizeObserver, NaN Guards, Loop Management.
+ * 4. Sci-Export: PDF and CSV generation tools added.
  */
 
 // --- GLOBAL ERROR HANDLING ---
@@ -381,7 +392,6 @@ window.Sim = {
         if(k==='logistic') return {x:0.1};
         if(k==='predator') return {x:10, y:5};
         if(k==='kuramoto') return Array(12).fill(0).map(()=>({th:Math.random()*6.28, w:0.5+Math.random()}));
-        // FIX: The syntax error was here. -(i-30)**2/20 needs parens around the exponentiation or removal of unary ambiguity.
         if(k==='heat' || k==='reaction' || k==='maxwell' || k==='quantum') return {u: new Float32Array(60).map((_,i)=> (k==='reaction'||k==='quantum'?Math.random():Math.exp(-((i-30)**2)/20))), v: new Float32Array(60).fill(0)};
         return {x:0, v:0};
     },
@@ -466,7 +476,7 @@ window.Sim = {
              const S = Math.pow(inS.P/5, 1.5) * p; s.P = Math.max(1, s.P + (100 - Math.pow(s.P/5, 1.5) - S) * 0.5 * dt); s.S = S;
         } else if(k==='supply_chain') {
             for(let i=0; i<4; i++) {
-                let demand = (i===3) ? 20 + Math.sin(this.t)*5 : (isIdeal?s[i+1].order : inS[i+1].order); // Fixed typo 'ideal' -> 'isIdeal'
+                let demand = (i===3) ? 20 + Math.sin(this.t)*5 : (isIdeal?s[i+1].order : inS[i+1].order); 
                 s[i].inv += (20 - demand)*dt*p; s[i].order = Math.max(0, demand + (20-s[i].inv));
             }
         } else if(k==='game') {
@@ -569,15 +579,151 @@ window.Sim = {
 };
 
 window.DataLog = {
-    buffer: new Float32Array(3000), head: 0,
-    reset() { this.buffer.fill(0); this.head = 0; },
+    buffer: new Float32Array(3000), 
+    timeLog: new Float32Array(1000), // Separate buffer to store Time without breaking Renderer's expected stride
+    head: 0,
+    reset() { this.buffer.fill(0); this.timeLog.fill(0); this.head = 0; },
     push(t, a, b) { 
         if(!isFinite(t)) return; 
         const i = this.head * 3; 
         this.buffer[i]=a; this.buffer[i+1]=b; this.buffer[i+2]=a-b; 
+        this.timeLog[this.head] = t; // Store time separately for export
         this.head = (this.head+1) % 1000; 
     },
-    getTrace() { return { buf: this.buffer, head: this.head }; }
+    getTrace() { return { buf: this.buffer, head: this.head }; },
+    
+    // New Method for Exporting
+    getExportData() {
+        const len = 1000;
+        const rows = [];
+        // Reconstruct timeline from Ring Buffer
+        for(let i=0; i<len; i++) {
+            const idx = (this.head + i) % len;
+            const t = this.timeLog[idx];
+            if(t === 0 && i < len - 100) continue; // Skip empty prefix
+            const bIdx = idx * 3;
+            rows.push({
+                t: t,
+                ideal: this.buffer[bIdx],
+                real: this.buffer[bIdx+1],
+                delta: this.buffer[bIdx+2]
+            });
+        }
+        return rows;
+    }
+};
+
+// --- NEW EXPORTER MODULE ---
+window.Exporter = {
+    downloadCSV() {
+        const data = window.DataLog.getExportData();
+        if(data.length === 0) { alert("No simulation data to export."); return; }
+        
+        let csv = "Time (s),Ideal State,Real State (Delayed),Delta\n";
+        data.forEach(r => {
+            csv += `${r.t.toFixed(4)},${r.ideal.toFixed(4)},${r.real.toFixed(4)},${r.delta.toFixed(4)}\n`;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `inspector_data_${window.Sim.activeKey}_${Date.now()}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    },
+
+    generatePDF() {
+        const { jsPDF } = window.jspdf;
+        if(!jsPDF) { alert("PDF Library not loaded."); return; }
+
+        const doc = new jsPDF();
+        const data = window.DataLog.getExportData();
+        const model = window.DB[window.Sim.activeKey];
+        
+        // --- 1. Header ---
+        doc.setFillColor(5, 5, 7);
+        doc.rect(0, 0, 210, 40, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.text("Assumption Inspector", 15, 20);
+        doc.setFontSize(10);
+        doc.setTextColor(200, 200, 200);
+        doc.text("Scientific Report v2.3", 15, 30);
+        
+        // --- 2. Model Metadata ---
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(14);
+        doc.text(`Model: ${model.name}`, 15, 55);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Timestamp: ${new Date().toLocaleString()}`, 15, 62);
+        doc.text(`Time Type: ${model.timeType}`, 15, 68);
+        doc.text(`Artifacts: ${model.artifacts.join(", ")}`, 15, 74);
+        
+        // --- 3. Configuration ---
+        doc.setDrawColor(200, 200, 200);
+        doc.line(15, 80, 195, 80);
+        doc.setFontSize(12);
+        doc.setTextColor(0,0,0);
+        doc.text("Simulation Parameters", 15, 90);
+        doc.setFontSize(10);
+        doc.text(`Delay (tau): ${window.Sim.config.delay.toFixed(2)}s`, 15, 100);
+        doc.text(`Coupling Strength: ${window.Sim.config.param.toFixed(2)}`, 80, 100);
+        doc.text(`Duration Recorded: ${data.length > 0 ? (data[data.length-1].t - data[0].t).toFixed(2) : 0}s`, 140, 100);
+
+        // --- 4. Statistics ---
+        let maxDelta = 0;
+        let mse = 0;
+        data.forEach(d => {
+            const absD = Math.abs(d.delta);
+            if(absD > maxDelta) maxDelta = absD;
+            mse += (d.delta * d.delta);
+        });
+        mse = data.length ? (mse / data.length) : 0;
+        
+        doc.text(`Max Deviation: ${maxDelta.toFixed(4)}`, 15, 106);
+        doc.text(`Mean Squared Error: ${mse.toFixed(4)}`, 80, 106);
+
+        // --- 5. Visual Snapshot ---
+        doc.text("Oscilloscope Trace", 15, 125);
+        const canvas = document.getElementById('graphCanvas');
+        if(canvas) {
+            // Create a temporary white canvas to avoid black background in PDF
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width = canvas.width;
+            tmpCanvas.height = canvas.height;
+            const ctx = tmpCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0,0,tmpCanvas.width, tmpCanvas.height);
+            ctx.drawImage(canvas, 0, 0);
+            
+            try {
+                const imgData = tmpCanvas.toDataURL("image/jpeg", 0.8);
+                doc.addImage(imgData, 'JPEG', 15, 130, 180, 60);
+            } catch(e) {
+                doc.text("(Visual snapshot unavailable - Tainted Canvas)", 15, 140);
+            }
+        }
+
+        // --- 6. Mathematical Note ---
+        doc.setFillColor(245, 245, 250);
+        doc.rect(15, 200, 180, 30, 'F');
+        doc.setFontSize(10);
+        doc.setTextColor(50, 50, 50);
+        doc.text("Mathematical Formalism:", 20, 210);
+        doc.setFont("courier");
+        doc.text(model.latex, 20, 220);
+        
+        // --- 7. Pedagogical Note ---
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(9);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`"${model.truth}"`, 105, 270, { align: "center" });
+
+        doc.save(`inspector_report_${window.Sim.activeKey}.pdf`);
+    }
 };
 
 window.Renderer = {
