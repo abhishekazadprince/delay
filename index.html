@@ -576,8 +576,19 @@ window.Sim = {
     // EXTRACT VELOCITY SCALAR FOR HUD
     getVelocityScalar(s) {
         if(!s) return 0;
-        if(s.vx!==undefined) return Math.sqrt(s.vx**2 + s.vy**2);
-        if(s.v!==undefined) return s.v;
+        // Standard 2D Physics (Gravity)
+        if(s.vx!==undefined && typeof s.vx === 'number') return Math.sqrt(s.vx**2 + s.vy**2);
+        // 1D Physics (PID, Hookes) - Return raw velocity (includes direction)
+        if(s.v!==undefined && typeof s.v === 'number') return s.v;
+        // Double Pendulum - Combine angular velocities
+        if(s.v1!==undefined) return Math.sqrt(s.v1**2 + s.v2**2);
+        // Field Models (Heat, Quantum) - s.v is Float32Array, sample middle
+        if(s.v && s.v.length) return s.v[30] || 0;
+        // Agents (Boids, Traffic) - Average speed
+        if(Array.isArray(s) && s.length > 0) {
+            if(s[0].v !== undefined) return s.reduce((a,b)=>a+b.v,0)/s.length;
+            if(s[0].vx !== undefined) return s.reduce((a,b)=>a+Math.sqrt(b.vx**2+b.vy**2),0)/s.length;
+        }
         return 0;
     },
 
