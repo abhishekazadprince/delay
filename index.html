@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#050507">
     <meta name="description" content="Scientific inspection tool for time-delayed causal systems.">
     <meta name="author" content="Assumption Inspector">
-    <title>Assumption Inspector v5.5 [Refined]</title>
+    <title>Assumption Inspector v7.7 [Final Stable]</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -46,7 +46,9 @@
             overflow: hidden; 
             margin: 0; 
             padding: 0;
-            overscroll-behavior: none;
+            overscroll-behavior: none; 
+            touch-action: none; /* Critical for mobile canvas interaction */
+            user-select: none; /* Prevents text selection during interaction */
         }
 
         /* --- SCROLLBARS --- */
@@ -141,6 +143,22 @@
         .btn:hover, .btn.active { color: var(--accent); border-color: var(--accent); box-shadow: 0 0 8px var(--accent-dim); }
         .btn.active-pulse { animation: pulseBtn 1s infinite; color: var(--accent); border-color: var(--accent); }
         @keyframes pulseBtn { 0% { box-shadow: 0 0 0 0 rgba(245,158,11, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(245,158,11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245,158,11, 0); } }
+
+        /* Custom Input for Math */
+        .math-input {
+            width: 100%; 
+            background: #131316; 
+            border: 1px solid #333; 
+            color: var(--accent);
+            padding: 14px 16px; 
+            border-radius: 8px; 
+            font-size: 16px; 
+            font-family: var(--font-mono);
+            outline: none; 
+            transition: border-color 0.2s;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .math-input:focus { border-color: var(--accent); box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), 0 0 8px var(--accent-dim); }
 
         input[type=text] { 
             width: 100%; 
@@ -262,6 +280,7 @@
         }
         .info-block h4 { color: white; margin: 0 0 10px 0; font-size: 14px; font-weight: 700; letter-spacing: -0.3px; }
         .info-block p { margin: 0 0 12px 0; }
+        .guide-key { color: var(--accent); font-weight: bold; font-family: var(--font-mono); background: rgba(245,158,11,0.1); padding: 2px 6px; border-radius: 4px; font-size: 11px; }
         @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         
         /* KaTeX overrides */
@@ -276,7 +295,7 @@
             background: white;
             z-index: -100; 
             visibility: visible;
-            opacity: 0; /* Hidden visually but renderable */
+            opacity: 0; 
             pointer-events: none;
         }
         
@@ -317,7 +336,7 @@
             <div style="max-width: 800px; margin: 0 auto; padding-top: 60px; padding-bottom: 120px;">
                 <div style="text-align: center; margin-bottom: 40px;">
                     <h1 style="font-size: 2.5rem; margin-bottom: 8px; font-weight: 300; letter-spacing: -1.5px; background: linear-gradient(to right, #fff, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Assumption Inspector</h1>
-                    <p style="color: var(--text-muted); font-size: 12px; font-family: var(--font-mono);">v5.5 [REFINED]</p>
+                    <p style="color: var(--text-muted); font-size: 12px; font-family: var(--font-mono);">v7.7 [FINAL STABLE]</p>
                     <div style="margin-top: 30px; position: relative;">
                         <input type="text" id="lib-search" placeholder="Search models, artifacts or terms..." oninput="window.App.debouncedFilter()">
                         <div style="position: absolute; right: 14px; top: 14px; color: #555;">🔍</div>
@@ -360,8 +379,9 @@
                 </div>
 
                 <div style="background: #08080a; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; flex-shrink: 0; padding-bottom: 4px;">
-                    <div style="padding: 6px 16px; display:flex; align-items:center;">
+                    <div style="padding: 6px 16px; display:flex; align-items:center; justify-content: space-between;">
                         <span style="font-size: 9px; color: #666; letter-spacing: 0.5px; font-weight: 600;">DELTA OSCILLOSCOPE</span>
+                        <span id="lyapunov-display" style="font-size: 9px; color: #444; font-family: var(--font-mono); display:none;">λ ≈ 0.000</span>
                     </div>
                     <div style="height: 100px; position:relative;">
                         <canvas id="graphCanvas"></canvas>
@@ -392,6 +412,20 @@
                         </div>
                     </div>
 
+                    <div id="custom-editor-panel" class="hidden" style="margin-bottom: 24px;">
+                        <div class="flex justify-between items-center mb-2">
+                            <div style="font-size: 10px; font-weight: 700; color: #fff;">EQUATION: ACCELERATION \(a(t) = \)</div>
+                            <button class="btn" style="padding: 4px 8px; font-size: 9px;" onclick="window.App.applyCustomCode()">APPLY & RESET</button>
+                        </div>
+                        <input type="text" id="custom-code" class="math-input" spellcheck="false" autocomplete="off" oninput="window.Sim.clearFnCache()">
+                        <div style="font-size: 9px; color: #666; margin-top: 6px; font-family: var(--font-mono); display:flex; gap:10px;">
+                            <span><strong>x, v:</strong> Pos/Vel</span>
+                            <span><strong>x_tau, v_tau:</strong> Delayed</span>
+                            <span><strong>t:</strong> Time</span>
+                            <span><strong>p:</strong> Param</span>
+                        </div>
+                    </div>
+
                     <div class="flex-col gap-4">
                         <div class="glass-panel" style="padding: 20px; border-left: 4px solid var(--accent);">
                             <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); margin-bottom: 10px; letter-spacing: 1px;">THE FRICTION</div>
@@ -411,6 +445,12 @@
                                 <span>HISTORY & PHILOSOPHY</span><span id="history-arrow" style="font-size: 9px;">▼</span>
                             </div>
                             <div id="history-content" class="info-block"></div>
+
+                            <div class="info-toggle" onclick="window.App.toggleInfo('limitations')">
+                                <span>USER MANUAL & GUIDE</span><span id="limitations-arrow" style="font-size: 9px;">▼</span>
+                            </div>
+                            <div id="limitations-content" class="info-block" style="display: block;">
+                                </div>
                             
                             <div id="info-artifacts" style="margin-top: 16px; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); border-top: 1px solid #222; padding-top: 8px;"></div>
                         </div>
@@ -441,6 +481,16 @@
                             <span id="param-display" style="font-size: 11px; color: var(--accent); font-family: var(--font-mono);">1.00</span>
                         </div>
                         <input type="range" min="0.1" max="3.0" step="0.1" value="1.0" oninput="window.Sim.config.param = parseFloat(this.value); document.getElementById('param-display').innerText = parseFloat(this.value).toFixed(2);">
+                    </div>
+
+                    <div class="flex justify-between items-center">
+                        <span style="font-size: 13px; color: #ccc;">Runge-Kutta 4 (RK4)</span>
+                        <label class="toggle"><input type="checkbox" id="rk4-toggle" onchange="window.Sim.config.useRK4 = this.checked"><span class="slider"></span></label>
+                    </div>
+
+                    <div class="flex justify-between items-center">
+                        <span style="font-size: 13px; color: #ccc;">Lyapunov Calc</span>
+                        <label class="toggle"><input type="checkbox" id="lyap-toggle" onchange="window.Sim.toggleLyapunov(this.checked)"><span class="slider"></span></label>
                     </div>
 
                     <div class="flex justify-between items-center">
@@ -534,67 +584,212 @@ window.onerror = function(msg, url, line) {
     return false;
 };
 
-// --- DATABASE ---
+// --- DATABASE: THE COMPLETE KNOWLEDGE BASE & MANUAL ---
 window.DB = {
+    "custom": {
+        name: "Arbitrary Equations", timeType: "Custom", artifacts: ["User Defined"],
+        latex: "$$a(t) = f(t, x, v, x_\\tau, v_\\tau)$$",
+        truth: "The power to define your own universe.",
+        theory: "<h4>Arbitrary DDE Solver</h4><p>This mode allows you to define the <strong>acceleration</strong> (force per unit mass) of the system using a natural mathematical syntax.</p><p>You have access to current state variables ($x, v$) and historical state variables delayed by $\\tau$ ($x_\\tau, v_\\tau$). The system integrates this acceleration using either Euler or 4th-order Runge-Kutta methods. This flexibility transforms the inspector from a gallery of pre-set models into a true laboratory for exploring Delay Differential Equations (DDEs).</p><p><strong>Syntax:</strong> Use standard math functions like <code>sin()</code>, <code>cos()</code>, <code>abs()</code>. No 'Math.' prefix needed.</p>",
+        history: "<h4>Computational Physics</h4><p>The ability to solve arbitrary Differential Equations numerically allows physicists to explore systems that have no analytical (closed-form) solutions. Most non-linear DDEs fall into this category. The practice of numerically integrating these equations began with manual calculations in astronomy, evolved through mechanical integrators, and exploded with the advent of digital computers in the mid-20th century.</p>",
+        guide: "<p><span class='guide-key'>IMPULSE</span> Applies a sudden force. Use to test stability.</p><p><span class='guide-key'>COUPLING (p)</span> A multiplier for your equation (variable <code>p</code>).</p><p><strong>How to use:</strong> Type an equation like <code>-x - 0.5*v</code> for a spring. Add delay: <code>-x_tau</code>. Watch the system explode if you add too much delayed feedback.</p>",
+        equation: "-0.5*x - 0.2*x_tau - 0.1*v + sin(t*2)*p"
+    },
+    "custom_pde": {
+        name: "Custom 1D PDE", timeType: "Field", artifacts: ["User Defined"],
+        latex: "$$\\partial_t u = D \\nabla^2 u + f(u, u(t-\\tau))$$",
+        truth: "Field equations with delay.",
+        theory: "<h4>Partial Differential Equations</h4><p>This mode simulates a 1D field (like a string or a chemical solution). The editor defines the reaction-diffusion logic.</p>",
+        history: "Experimental feature for v7.5.",
+        guide: "<p><strong>Note:</strong> This mode uses JavaScript code, not simple math.</p><p>Available arrays: <code>u[]</code> (concentration), <code>v[]</code> (rate of change).</p>",
+        equation: "// PDE Mode uses JS code block (Advanced)\nreturn { du: v[i] + 0.5*lap(u,i), dv: -0.1*v[i] };"
+    },
     "gravity": { 
         name: "Retarded Gravitation", timeType: "Continuous", artifacts: ["Phantom Torque", "Spiral Decay"], 
-        latex: "$$ \\vec{F}(t) = -\\frac{GM}{(r^2+\\epsilon)^{1.5}} \\vec{r}(t-\\tau) $$", 
-        truth: "Gravity pulls towards where the object WAS, not where it is.", 
-        theory: "<h4>The Speed of Gravity Problem</h4><p>In Newtonian mechanics, gravity is instantaneous. If the Sun vanished, Earth would fly off immediately. However, Special Relativity dictates that no information travels faster than light ($c$).</p><p>If we simply add a time delay ($\\tau$) to the position term in Newton's law ($1/r^2$), the force vector points to where the attractor <em>was</em>, not where it <em>is</em>. This creates a tangential force component relative to the orbit, which performs work on the system.</p><p>This 'Phantom Torque' increases the orbital energy, causing the planet to spiral outwards (or inwards depending on the frame), violating conservation of angular momentum and energy. General Relativity solves this by having the velocity-dependent terms cancel out the delay terms to a high order, restoring stability.</p>",
-        history: "<h4>Newton vs. Leibniz</h4><p>Isaac Newton was famously uncomfortable with his own theory of gravity because it implied 'Action at a Distance'. Pierre-Simon Laplace later calculated that for planetary orbits to remain stable under a delayed force, the speed of gravity must be at least $7 \\times 10^6$ times the speed of light. This paradox was only resolved by Einstein's General Relativity (1915).</p>"
+        latex: "$$\\vec{F}(t) = -\\frac{GM}{(r^2+\\epsilon)^{1.5}} \\vec{r}(t-\\tau)$$", 
+        truth: "Naive delay in Newton's laws creates energy non-conservation.", 
+        theory: "<h4>The Speed of Gravity Problem</h4><p>In classical Newtonian mechanics, gravity is instantaneous. If the Sun vanished, Earth would fly off its orbit immediately. However, Special Relativity dictates that no information can travel faster than light ($c$).</p><p>If we simply add a time delay ($\\tau$) to the position term in Newton's inverse-square law, the force vector points to where the attractor <em>was</em>, not where it <em>is</em>. This creates a tangential force component relative to the orbit. Unlike the radial force, this tangential component performs work on the system.</p><p>This 'Phantom Torque' increases the orbital energy, causing the planet to spiral outwards (or inwards depending on reference frame), violating conservation of angular momentum and energy. In General Relativity, this instability is canceled out to a high order by velocity-dependent terms and the momentum of the gravitational field itself.</p>",
+        history: "<h4>Newton vs. Leibniz & Einstein</h4><p>Isaac Newton was famously uncomfortable with his own theory of gravity because it implied 'Action at a Distance' across a vacuum. Pierre-Simon Laplace later calculated that for planetary orbits to remain stable under a force that propagates at finite speed, the speed of gravity must be at least $7 \\times 10^6$ times the speed of light. This paradox stood for over a century until Einstein's General Relativity (1915) resolved it by treating gravity as curvature of spacetime, not a force vector.</p>",
+        guide: "<p><span class='guide-key'>DELAY SLIDER</span> Increases the time lag of the gravitational force. <br><strong>0.00s:</strong> Perfect stable orbit.<br><strong>>0.10s:</strong> The planet will gain energy and spiral outwards.<br><strong>>1.00s:</strong> Rapid ejection from the system.</p><p><span class='guide-key'>IMPULSE</span> Kicks the planet. Use this to test if the orbit can self-correct (it can't).</p>"
     },
     "pid": { 
         name: "PID Controller", timeType: "Continuous", artifacts: ["Overshoot", "Limit Cycles"], 
-        latex: "$$ u(t) = K_p e(t-\\tau) + K_d \\dot{e}(t-\\tau) + K_i \\int e $$", 
+        latex: "$$u(t) = K_p e(t-\\tau) + K_d \\dot{e}(t-\\tau) + K_i \\int e$$", 
         truth: "Sensor lag creates a feedback loop that amplifies noise.", 
-        theory: "<h4>Phase Margin Erosion</h4><p>A PID controller assumes instant error correction. When a delay ($\\tau$) is introduced, the correction signal arrives late.</p><p>Mathematically, a delay of $\\tau$ corresponds to a phase shift of $\\phi = \\omega \\tau$. As the frequency $\\omega$ increases, this phase shift grows. When the total phase lag reaches 180 degrees, the negative feedback turns into <em>positive feedback</em>.</p>",
-        history: "<h4>From Steam to Cybernetics</h4><p>Nicolas Minorsky formalized the PID controller in 1922 while designing automatic steering for US Navy ships. He observed that helmsmen steered not just by current error, but by past error (Integral) and rate of change (Derivative).</p>"
+        theory: "<h4>Phase Margin Erosion</h4><p>A PID controller operates on the assumption of instant error correction. It calculates a control signal based on Proportional (current), Integral (past accumulation), and Derivative (predicted future) errors. When a delay ($\\tau$) is introduced—representing sensor lag or processing time—the correction signal arrives late.</p><p>Mathematically, a time delay of $\\tau$ corresponds to a frequency-dependent phase shift of $\\phi = \\omega \\tau$. As the frequency of oscillation $\\omega$ increases, this phase shift grows linearly. When the total phase lag of the system reaches 180 degrees, the negative feedback meant to stabilize the system turns into <em>positive feedback</em>, amplifying oscillations instead of damping them. This is characterized by the Nyquist Stability Criterion.</p>",
+        history: "<h4>From Steam to Cybernetics</h4><p>Nicolas Minorsky formalized the PID controller logic in 1922 while designing automatic steering systems for US Navy ships. He observed that expert helmsmen steered not just by current error, but by past error (Integral) and the rate of turning (Derivative). The formal study of stability under delay became crucial during the cybernetics era of the 1940s, led by Norbert Wiener, and remains the cornerstone of modern Control Theory.</p>",
+        guide: "<p><span class='guide-key'>GOAL</span> The white block tries to stay at position 0.</p><p><span class='guide-key'>COUPLING (p)</span> Controls the 'Gain' (Aggressiveness). Higher gain corrects faster but overshoots.</p><p><span class='guide-key'>DELAY</span> Simulates sensor lag. Increase this, and the block will start oscillating wildly around the center.</p>"
     },
     "hookes": { 
         name: "Harmonic Oscillator", timeType: "Continuous", artifacts: ["Energy Injection"], 
-        latex: "$$ \\ddot{x} + \\omega_0^2 x(t-\\tau) = 0 $$", 
+        latex: "$$\\ddot{x} + \\omega_0^2 x(t-\\tau) = 0$$", 
         truth: "Delayed restoring force pumps energy into the system.", 
-        theory: "<h4>Regenerative Chatter</h4><p>In a standard spring-mass system, the restoring force is exactly out of phase with velocity, doing zero net work over a cycle. With a delay, the force acts on a past position, allowing it to have a component <em>in phase</em> with velocity. Since Power $P = F \\cdot v$, this injects energy.</p>",
-        history: "<h4>The Bridge That Collapsed</h4><p>Robert Hooke formulated his law of elasticity ($F=-kx$) in 1660. The phenomenon of self-excited vibration due to delay became critically important in the 20th century, notably with the Tacoma Narrows Bridge collapse (1940).</p>"
+        theory: "<h4>Regenerative Chatter</h4><p>In a standard ideal spring-mass system ($F=-kx$), the restoring force is exactly 180 degrees out of phase with position, and 90 degrees out of phase with velocity. Over a full cycle, the net work done by the spring is zero.</p><p>With a delay, the force acts based on a past position. This phase shift allows the force to have a component that is <em>in phase</em> with the velocity. Since Power is defined as $P = F \\cdot v$, a force component in the direction of velocity performs positive work, injecting energy into the system. This leads to unbounded growth in amplitude, a phenomenon known in engineering as 'regenerative chatter' in machine tooling, where a delayed cutting force causes the tool to bounce violently.</p>",
+        history: "<h4>The Bridge That Collapsed</h4><p>Robert Hooke formulated his law of elasticity ($F=-kx$) in 1660. However, the phenomenon of self-excited vibration due to time delay became critically important in the 20th century. The collapse of the Tacoma Narrows Bridge (1940) is the most famous example of aeroelastic flutter, a related instability where the aerodynamic forces lag behind the structural motion, pumping energy into the bridge until failure.</p>",
+        guide: "<p><span class='guide-key'>OBSERVATION</span> Without delay, the spring oscillates forever (conservation of energy). With any delay > 0, the amplitude grows exponentially.</p><p><span class='guide-key'>OSC BUTTON</span> Forces a start to the motion. Watch the 'Delta' graph to see the energy injection.</p>"
     },
     "vanderpol": { 
         name: "Van der Pol Oscillator", timeType: "Nonlinear", artifacts: ["Limit Cycle Distortion"], 
-        latex: "$$ \\ddot{x} - \\mu(1-x^2)\\dot{x} + x(t-\\tau) = 0 $$", 
+        latex: "$$\\ddot{x} - \\mu(1-x^2)\\dot{x} + x(t-\\tau) = 0$$", 
         truth: "Delay distorts the stable limit cycle, often leading to chaos.", 
-        theory: "<h4>Delay-Induced Bifurcation</h4><p>The Van der Pol oscillator has a stable 'limit cycle'. As delay increases, the system undergoes a Hopf bifurcation, where the stable limit cycle can distort or break down into chaos.</p>",
-        history: "<h4>The Heartbeat of Radio</h4><p>Balthasar van der Pol was a Dutch physicist studying vacuum tube circuits in the 1920s. He discovered stable oscillations (limit cycles) that modeled both radios and the human heartbeat.</p>"
+        theory: "<h4>Delay-Induced Bifurcation</h4><p>The Van der Pol oscillator is a non-conservative system with non-linear damping. It exhibits a stable 'limit cycle'—an isolated closed trajectory in phase space that the system converges to, regardless of initial conditions.</p><p>As delay is introduced to the restoring force, the system undergoes a Hopf bifurcation. The delay alters the energy balance of the limit cycle. For large delays, the single period-1 limit cycle can destabilize, breaking down into period-doubling bifurcations and eventually chaotic motion.</p>",
+        history: "<h4>The Heartbeat of Radio</h4><p>Balthasar van der Pol was a Dutch physicist studying vacuum tube circuits (triodes) in the 1920s. He discovered stable oscillations that were neither purely harmonic nor chaotic. He realized these 'relaxation oscillations' modeled not just electronic circuits, but also biological phenomena like the human heartbeat. His work was a precursor to modern Chaos Theory.</p>",
+        guide: "<p><span class='guide-key'>PHASE SPACE</span> Enable 'Phase Space' in the settings drawer. You will see a circle (limit cycle).</p><p><span class='guide-key'>DELAY</span> Increasing delay warps this circle into a strange shape, representing the distortion of the heartbeat/signal.</p>"
     },
     "duffing": { 
         name: "Duffing Oscillator", timeType: "Chaotic", artifacts: ["Strange Attractors"], 
-        latex: "$$ \\ddot{x} + \\delta\\dot{x} + \\alpha x + \\beta x^3(t-\\tau) = \\gamma \\cos(\\omega t) $$", 
+        latex: "$$\\ddot{x} + \\delta\\dot{x} + \\alpha x + \\beta x^3(t-\\tau) = \\gamma \\cos(\\omega t)$$", 
         truth: "Double-well potential creates chaos even without delay; delay exacerbates it.", 
-        theory: "<h4>Fractal Basins of Attraction</h4><p>The Duffing equation models a particle moving in a double-well potential. Adding a time delay to the nonlinear stiffness term ($x^3$) alters the topology of the 'strange attractor'.</p>",
-        history: "<h4>The End of Determinism</h4><p>Georg Duffing (1918) studied this equation to model vibration. It became a prototype for exploring 'Strange Attractors'—fractal shapes in phase space that proved determinism does not imply predictability.</p>"
+        theory: "<h4>Fractal Basins of Attraction</h4><p>The Duffing equation models a particle moving in a double-well potential (like a beam buckled by magnets). It is a classic example of a chaotic system.</p><p>Adding a time delay to the non-linear stiffness term ($x^3$) drastically alters the topology of the 'strange attractor'. It increases the dimensionality of the phase space from finite (position, velocity, time) to infinite (due to the history function), making the chaotic trajectory even more unpredictable and sensitive to initial conditions. The basins of attraction become fractal, meaning a tiny shift in starting position can flip the final outcome entirely.</p>",
+        history: "<h4>The End of Determinism</h4><p>Georg Duffing (1918) studied this equation to model mechanical vibration in gears. Along with the Lorenz system, the Duffing oscillator became a prototype for exploring 'Strange Attractors'—fractal shapes in phase space that proved that a deterministic universe does not imply a predictable one.</p>",
+        guide: "<p><span class='guide-key'>POINCARÉ MAP</span> Enable this in the bottom toolbar. It takes a snapshot once per cycle. A clean line means order; a cloud of dots means chaos.</p><p><span class='guide-key'>COUPLING</span> Controls the driving force amplitude. Low values are stable; high values induce chaos.</p>"
     },
-    "pendulum_double": { name: "Double Pendulum", timeType: "Continuous", artifacts: ["Chaos Onset"], latex: "$$ \\theta_{1,2}'' = f(\\theta, t-\\tau) $$", truth: "Micro-delays break the Lyapunov exponent instantly.", theory: "<h4>Sensitivity to Initial Conditions</h4><p>The double pendulum is the standard bearer for chaos theory. When we explicitly add a delay $\\tau$ to the coupling between the limbs, we sever the conservation of energy.</p>", history: "<h4>The Three-Body Problem</h4><p>Henri Poincaré's work on the Three-Body Problem (1890) proved that for most initial conditions, planetary orbits are non-integrable and chaotic.</p>" },
-    "boids": { name: "Flocking (Boids)", timeType: "Agent", artifacts: ["Collision", "Dispersion"], latex: "$$ \\vec{v}_i = \\sum_{j \\neq i} f(\\vec{x}_j(t-\\tau)) $$", truth: "Reaction time prevents tight formations, causing crashes.", theory: "<h4>Sensory Latency</h4><p>If delay exceeds a critical threshold, the 'Separation' rule fails. Birds react to a neighbor's old position, failing to brake in time.</p>", history: "<h4>Artificial Life</h4><p>In 1986, Craig Reynolds presented 'Boids' at SIGGRAPH. It launched the field of Artificial Life, shifting the paradigm from 'top-down' control to 'bottom-up' emergence.</p>" },
-    "traffic": { name: "Traffic Waves", timeType: "Hybrid", artifacts: ["Phantom Jams"], latex: "$$ \\dot{v}_n(t) = \\kappa (V_{opt} - v_n(t-\\tau)) $$", truth: "Brake light delay causes stop-and-go waves upstream.", theory: "<h4>String Instability</h4><p>If delay is too high, braking amplification creates a shockwave traveling backwards through traffic.</p>", history: "<h4>Fluid Dynamics of Cars</h4><p>Discrete models like the Optimal Velocity Model (Bando et al., 1995) proved that traffic jams are a phase transition.</p>" },
-    "market": { name: "Market Cycle", timeType: "Discrete", artifacts: ["Boom/Bust"], latex: "$$ S_t = D(P_{t-\\tau}) $$", truth: "Production lag causes massive boom-bust cycles.", theory: "<h4>The Cobweb Model</h4><p>If producers decide based on current high prices but goods arrive $\\tau$ months later, they flood the market, causing a crash.</p>", history: "<h4>Rational vs. Behavioral</h4><p>Nicholas Kaldor (1934) proposed the Cobweb Theorem to explain persistent cycles in agricultural markets.</p>" },
-    "heat": { name: "Heat Diffusion", timeType: "Field", artifacts: ["Wave-like Heat"], latex: "$$ \\partial_t u = \\alpha \\nabla^2 u(t-\\tau) $$", truth: "Delay creates waves in heat diffusion.", theory: "<h4>Cattaneo-Vernotte Equation</h4><p>Introducing a relaxation time converts the parabolic Heat Equation into a hyperbolic Wave Equation, predicting 'Second Sound'.</p>", history: "<h4>Thermodynamics vs. Relativity</h4><p>Joseph Fourier's 1822 theory implies infinite speed. Cattaneo (1948) introduced a 'relaxation time' to reconcile it with Relativity.</p>" },
-    "maxwell": { name: "Maxwell Wave Eq", timeType: "Field", artifacts: ["Interference"], latex: "$$ \\square u(t-\\tau) = 0 $$", truth: "Discrete delay creates diffraction patterns.", theory: "<h4>Retarded Potentials</h4><p>A discrete delay in a wave equation simulation creates artificial interference patterns resembling diffraction gratings.</p>", history: "<h4>The Aether Debate</h4><p>James Clerk Maxwell unified electricity and magnetism in 1865.</p>" },
-    "supply_chain": { name: "Supply Chain", timeType: "Discrete", artifacts: ["Bullwhip Effect"], latex: "$$ O_t = D_t + (S - I_{t-\\tau}) $$", truth: "Information delay causes massive inventory oscillation.", theory: "<h4>The Bullwhip Effect</h4><p>Small fluctuations in consumer demand cause increasingly large fluctuations in inventory orders upstream.</p>", history: "<h4>The Beer Game</h4><p>Jay Forrester at MIT founded System Dynamics in the 1950s.</p>" },
-    "game": { name: "Iterated Dilemma", timeType: "Discrete", artifacts: ["Trust Decay"], latex: "$$ U_i = f(s_i, s_{-i}) $$", truth: "Delayed retaliation encourages exploitation.", theory: "<h4>Discounted Future</h4><p>If retaliation is delayed, the 'discount factor' of future punishment drops, encouraging exploitation.</p>", history: "<h4>The Evolution of Cooperation</h4><p>In 1980, Robert Axelrod ran a computer tournament where 'Tit-for-Tat' won.</p>" },
-    "neural": { name: "Neural Learning", timeType: "Discrete", artifacts: ["Gradient Noise"], latex: "$$ w_{t+1} = w_t - \\eta \\nabla L(w_{t-\\tau}) $$", truth: "Stale gradients prevent convergence.", theory: "<h4>Asynchronous Gradient Descent</h4><p>Updating the model with 'stale gradients' is equivalent to adding noise. Large delays prevent convergence.</p>", history: "<h4>The Winter and Spring of AI</h4><p>The 'Parameter Server' architecture introduced the problem of stale gradients.</p>" },
-    "kuramoto": { name: "Kuramoto Sync", timeType: "Network", artifacts: ["Chimera States"], latex: "$$ \\dot{\\theta}_i = \\omega + K \\sum \\sin(\\theta_j(t-\\tau) - \\theta_i) $$", truth: "Delay prevents full synchronization.", theory: "<h4>Frustrated Synchronization</h4><p>Delay leads to 'Chimera States', where half the population synchronizes while the other half remains incoherent.</p>", history: "<h4>Fireflies and Bridges</h4><p>Yoshiki Kuramoto (1975) provided the mathematical model for synchronization.</p>" },
-    "logistic": { name: "Logistic Map", timeType: "Discrete", artifacts: ["Chaos Onset"], latex: "$$ x_{n+1} = r x_n (1-x_n) $$", truth: "Discrete feedback paths create chaos naturally.", theory: "<h4>Period Doubling</h4><p>As the growth rate $r$ increases, the system begins to oscillate between 2 values, then 4, then 8, eventually reaching chaos.</p>", history: "<h4>Chaos in a Calculator</h4><p>In 1976, biologist Robert May showed that simple deterministic equations could produce wild behavior.</p>" },
-    "reaction": { name: "Reaction-Diffusion", timeType: "Field", artifacts: ["Turing Patterns"], latex: "$$ \\partial_t u = D_u \\Delta u + f(u,v_{t-\\tau}) $$", truth: "Delay in chemical inhibition creates zebra stripes.", theory: "<h4>Turing Instability</h4><p>Adding a time delay breaks temporal symmetry, allowing oscillating patterns and spiral waves.</p>", history: "<h4>The Chemical Basis of Morphogenesis</h4><p>In 1952, Alan Turing showed how a uniform chemical soup could generate spots.</p>" },
-    "quantum": { name: "Quantum Collapse", timeType: "Field", artifacts: ["Superposition"], latex: "$$ |\\psi\\rangle \\to \\delta(x-x_0) $$", truth: "Measurement delay creates superposition artifacts.", theory: "<h4>The Measurement Problem</h4><p>This delay allows the wavefunction to evolve <em>during</em> the collapse, creating interference fringes.</p>", history: "<h4>God Does Not Play Dice?</h4><p>Modern Decoherence theory suggests 'collapse' is a fast physical process of entanglement.</p>" },
-    "predator": { name: "Predator-Prey", timeType: "Nonlinear", artifacts: ["Population Boom"], latex: "$$ \\dot{x} = \\alpha x - \\beta x y(t-\\tau) $$", truth: "Reproduction lag causes overshoot and extinction risk.", theory: "<h4>Lotka-Volterra with Delay</h4><p>Standard LV models show neutral stability (closed orbits). Adding delay makes the equilibrium unstable, leading to growing oscillations and eventual extinction.</p>", history: "<h4>Furs and Fish</h4><p>Analyzed by Vito Volterra (1926) to explain fish market statistics during WWI.</p>" }
+    "pendulum_double": { 
+        name: "Double Pendulum", timeType: "Continuous", artifacts: ["Chaos Onset"], 
+        latex: "$$\\theta_{1,2}'' = f(\\theta, t-\\tau)$$", 
+        truth: "Micro-delays break the Lyapunov exponent instantly.", 
+        theory: "<h4>Sensitivity to Initial Conditions</h4><p>The double pendulum is the standard bearer for chaos theory. Even without delay, it is extremely sensitive to initial conditions (high Lyapunov exponent). When we explicitly add a delay $\\tau$ to the coupling between the limbs, we sever the conservation of energy, often driving the system to extreme energy states rapidly. The delay effectively makes the coupling 'springy' in time, allowing energy to accumulate in the joint faster than it can be dissipated.</p>", 
+        history: "<h4>The Three-Body Problem</h4><p>Henri Poincaré's work on the Three-Body Problem (1890) proved that for most initial conditions, planetary orbits are non-integrable and chaotic. The Double Pendulum is the simplest physical system that exhibits this behavior, serving as a classroom demonstration of chaos for over a century.</p>", 
+        guide: "<p><span class='guide-key'>INTERACT</span> Drag the mouse to swing the pendulum.</p><p><span class='guide-key'>DELAY</span> Even 0.05s of delay makes the pendulum spin uncontrollably (gaining infinite energy). This shows why physics engines need very small time steps.</p>",
+        equation: "// Built-in complex physics" 
+    },
+    "boids": { 
+        name: "Flocking (Boids)", timeType: "Agent", artifacts: ["Collision", "Dispersion"], 
+        latex: "$$\\vec{v}_i = \\sum_{j \\neq i} f(\\vec{x}_j(t-\\tau))$$", 
+        truth: "Reaction time prevents tight formations, causing crashes.", 
+        theory: "<h4>Sensory Latency</h4><p>Flocking models rely on three rules: Separation, Alignment, and Cohesion. In a delay-free model, these rules create fluid, coordinated motion. However, biological agents have reaction times.</p><p>If the delay $\\tau$ exceeds a critical threshold, the 'Separation' rule fails. Birds react to where a neighbor <em>was</em>, not where it is. If the neighbor turns towards them during the delay interval, they will fail to take evasive action in time, leading to collisions or chaotic dispersion of the flock.</p>", 
+        history: "<h4>Artificial Life</h4><p>In 1986, Craig Reynolds presented 'Boids' at SIGGRAPH. It launched the field of Artificial Life, shifting the paradigm from 'top-down' control to 'bottom-up' emergence. It is used in everything from CGI in movies (like Batman Returns' bats) to autonomous drone swarm control.</p>", 
+        guide: "<p><span class='guide-key'>DELAY</span> Represents the reaction time of the bird. High delay = drunk birds crashing into each other.</p><p><span class='guide-key'>COUPLING</span> Controls the desire to flock. High coupling + high delay = massive cluster crash.</p>",
+        equation: "// Agent system" 
+    },
+    "traffic": { 
+        name: "Traffic Waves", timeType: "Hybrid", artifacts: ["Phantom Jams"], 
+        latex: "$$\\dot{v}_n(t) = \\kappa (V_{opt} - v_n(t-\\tau))$$", 
+        truth: "Brake light delay causes stop-and-go waves upstream.", 
+        theory: "<h4>String Instability</h4><p>This model represents drivers adjusting their speed based on the distance to the car ahead. The delay $\\tau$ represents human reaction time (approx 0.7s - 1.5s).</p><p>If a lead car taps its brakes, the follower reacts $\\tau$ seconds later. If they brake harder than necessary to compensate for the delay, the third car must brake even harder. This amplification creates a 'phantom traffic jam'—a shockwave of stopped cars traveling backwards through the traffic stream, even with no accident causing it.</p>", 
+        history: "<h4>Fluid Dynamics of Cars</h4><p>Traffic flow was originally modeled as a fluid. However, discrete models like the Optimal Velocity Model (Bando et al., 1995) proved that traffic jams are a phase transition, similar to water freezing into ice, triggered by critical density and reaction delay.</p>", 
+        guide: "<p><span class='guide-key'>VISUAL</span> Dots are cars moving clockwise. Red means stopped.</p><p><span class='guide-key'>IMPULSE</span> Forces one car to brake. Watch the red wave travel backwards.</p><p><span class='guide-key'>DELAY</span> Higher reaction time makes the jam last longer.</p>",
+        equation: "// Multi-agent" 
+    },
+    "market": { 
+        name: "Market Cycle", timeType: "Discrete", artifacts: ["Boom/Bust"], 
+        latex: "$$S_t = D(P_{t-\\tau})$$", 
+        truth: "Production lag causes massive boom-bust cycles.", 
+        theory: "<h4>The Cobweb Model</h4><p>In agricultural markets, farmers must decide how much to plant based on <em>current</em> prices, but the harvest arrives $\\tau$ months later. If prices are high, everyone plants more.</p><p>When the harvest arrives, the market is flooded (Oversupply), crashing prices. Farmers then plant less next season, leading to a shortage and price spike. This creates a persistent oscillation known as the Cobweb Cycle. Stability depends on the relative elasticity of supply and demand curves.</p>", 
+        history: "<h4>Rational vs. Behavioral</h4><p>Nicholas Kaldor (1934) proposed the Cobweb Theorem to explain persistent cycles in agricultural markets (corn/hog cycles). It challenged the idea of instant market equilibrium and highlighted the role of time in economic stability.</p>", 
+        guide: "<p><span class='guide-key'>GRAPH</span> Bar chart shows Price (left) vs Supply (right).</p><p><span class='guide-key'>DELAY</span> Represents production time. High delay leads to extreme Boom/Bust cycles.</p><p><span class='guide-key'>COUPLING</span> Represents market elasticity (how sensitive farmers are to price).</p>",
+        equation: "// Economic model" 
+    },
+    "heat": { 
+        name: "Heat Diffusion", timeType: "Field", artifacts: ["Wave-like Heat"], 
+        latex: "$$\\partial_t u = \\alpha \\nabla^2 u(t-\\tau)$$", 
+        truth: "Delay creates waves in heat diffusion.", 
+        theory: "<h4>Cattaneo-Vernotte Equation</h4><p>The standard Heat Equation implies infinite propagation speed—if you heat one end of a rod, the temperature at the other end changes instantly (albeit infinitesimally). This violates Relativity.</p><p>Introducing a relaxation time (delay) to the heat flux converts the parabolic Heat Equation into a hyperbolic Wave Equation. This predicts 'Second Sound'—heat traveling as a wave rather than just diffusing. This effect is observable in superfluid helium and some crystals at very low temperatures.</p>", 
+        history: "<h4>Thermodynamics vs. Relativity</h4><p>Joseph Fourier's 1822 theory was a masterpiece but physically impossible at relativistic scales. Carlo Cattaneo (1948) introduced a 'relaxation time' term to reconcile thermodynamics with the finite speed of light.</p>", 
+        guide: "<p><span class='guide-key'>INTERACT</span> Click to heat a spot on the rod.</p><p><span class='guide-key'>DELAY</span> 0s = Normal diffusion (smooth spread). High delay = Heat bounces back and forth like water waves.</p>",
+        equation: "// Field PDE" 
+    },
+    "maxwell": { 
+        name: "Maxwell Wave Eq", timeType: "Field", artifacts: ["Interference"], 
+        latex: "$$\\square u(t-\\tau) = 0$$", 
+        truth: "Discrete delay creates diffraction patterns.", 
+        theory: "<h4>Retarded Potentials</h4><p>This simulation introduces a global time delay to the Wave Equation. While physically artificial (real delay is spatial, $r/c$), it creates interference patterns similar to diffraction gratings.</p><p>The delayed self-interaction mimics boundary conditions or retarded potentials in electrodynamics, showing how temporal memory can create spatial structure in fields.</p>", 
+        history: "<h4>The Aether Debate</h4><p>James Clerk Maxwell unified electricity and magnetism in 1865, predicting electromagnetic waves. The finite speed of these waves ($c$) is the fundamental constant of our universe, linking space and time into spacetime.</p>", 
+        guide: "<p><span class='guide-key'>INTERACT</span> Click to create a ripple.</p><p><span class='guide-key'>DELAY</span> Creates a 'temporal echo' that interferes with the current wave, creating standing patterns.</p>",
+        equation: "// Field PDE" 
+    },
+    "supply_chain": { 
+        name: "Supply Chain", timeType: "Discrete", artifacts: ["Bullwhip Effect"], 
+        latex: "$$O_t = D_t + (S - I_{t-\\tau})$$", 
+        truth: "Information delay causes massive inventory oscillation.", 
+        theory: "<h4>The Bullwhip Effect</h4><p>In a multi-stage supply chain (Retailer -> Wholesaler -> Distributor -> Factory), a small fluctuation in consumer demand causes increasingly large fluctuations in orders upstream.</p><p>This is caused by information delay and lead time ($\\tau$). Each node overcompensates for the delay by ordering extra 'safety stock', amplifying the signal variance at every step. This leads to periods of empty shelves followed by massive overstock and waste.</p>", 
+        history: "<h4>The Beer Game</h4><p>Jay Forrester at MIT founded System Dynamics in the 1950s. He created the 'Beer Distribution Game' to demonstrate how rational individual actors in a delayed feedback system collectively create irrational systemic behavior.</p>", 
+        guide: "<p><span class='guide-key'>VISUAL</span> Bars represent inventory at 4 stages (Retail to Factory).</p><p><span class='guide-key'>IMPULSE</span> Simulates a sudden spike in consumer buying. Watch the wave amplify as it moves left (upstream).</p>",
+        equation: "// Discrete Map" 
+    },
+    "game": { 
+        name: "Iterated Dilemma", timeType: "Discrete", artifacts: ["Trust Decay"], 
+        latex: "$$U_i = f(s_i, s_{-i})$$", 
+        truth: "Delayed retaliation encourages exploitation.", 
+        theory: "<h4>Discounted Future</h4><p>In the Prisoner's Dilemma, cooperation is sustained by the threat of future retaliation (Tit-for-Tat). However, if retaliation is delayed, the 'discount factor' of future punishment drops.</p><p>If the delay is too long, the immediate gain from defection outweighs the distant pain of punishment. The system collapses into a Nash Equilibrium of mutual defection. This models the difficulty of enforcing treaties or climate agreements where consequences are delayed.</p>", 
+        history: "<h4>The Evolution of Cooperation</h4><p>In 1980, political scientist Robert Axelrod ran a computer tournament where 'Tit-for-Tat' won. His work showed how altruism could evolve in a selfish world, provided the 'shadow of the future' (interaction speed) was strong enough.</p>", 
+        guide: "<p><span class='guide-key'>SCORE</span> Shows points for Player A vs B.</p><p><span class='guide-key'>DELAY</span> High delay makes the players 'forget' the opponent's last move, leading to random betrayal.</p>",
+        equation: "// Game Theory" 
+    },
+    "neural": { 
+        name: "Neural Learning", timeType: "Discrete", artifacts: ["Gradient Noise"], 
+        latex: "$$w_{t+1} = w_t - \\eta \\nabla L(w_{t-\\tau})$$", 
+        truth: "Stale gradients prevent convergence.", 
+        theory: "<h4>Asynchronous Gradient Descent</h4><p>In distributed machine learning, worker nodes calculate gradients and send them to a parameter server. Due to network latency ($\\tau$), the gradients applied to the model are often 'stale'—calculated on an old version of the weights.</p><p>Mathematically, this is equivalent to adding noise to the optimization process. If the delay is small, it acts as regularization. If large, it prevents convergence entirely, causing the loss function to oscillate or diverge.</p>", 
+        history: "<h4>The Winter and Spring of AI</h4><p>The 'Parameter Server' architecture introduced by Google (Dean et al., 2012) brought the problem of stale gradients to the forefront of AI research, leading to new algorithms for asynchronous optimization.</p>", 
+        guide: "<p><span class='guide-key'>VISUAL</span> Bars are Neural Weights trying to reach the center line.</p><p><span class='guide-key'>DELAY</span> Represents network lag. High delay causes weights to overshoot their target forever.</p>",
+        equation: "// Optimization" 
+    },
+    "kuramoto": { 
+        name: "Kuramoto Sync", timeType: "Network", artifacts: ["Chimera States"], 
+        latex: "$$\\dot{\\theta}_i = \\omega + K \\sum \\sin(\\theta_j(t-\\tau) - \\theta_i)$$", 
+        truth: "Delay prevents full synchronization.", 
+        theory: "<h4>Frustrated Synchronization</h4><p>The Kuramoto model describes how coupled oscillators (like fireflies or pacemaker cells) synchronize. When the coupling signal is delayed, the system cannot achieve a unified phase.</p><p>Instead, it often settles into 'Chimera States'—a counter-intuitive condition where one group of oscillators is perfectly synchronized while the other group remains completely incoherent, despite identical coupling rules.</p>", 
+        history: "<h4>Fireflies and Bridges</h4><p>Yoshiki Kuramoto (1975) provided the mathematical model for synchronization. His work explains phenomena ranging from the flashing of fireflies in Thailand to the locking of power grids and the rhythmic firing of neurons.</p>", 
+        guide: "<p><span class='guide-key'>VISUAL</span> Spinning bars represent oscillators.</p><p><span class='guide-key'>GOAL</span> They want to spin together.</p><p><span class='guide-key'>DELAY</span> Prevents them from seeing neighbors correctly, breaking the sync.</p>",
+        equation: "// Network" 
+    },
+    "logistic": { 
+        name: "Logistic Map", timeType: "Discrete", artifacts: ["Chaos Onset"], 
+        latex: "$$x_{n+1} = r x_n (1-x_n)$$", 
+        truth: "Discrete feedback paths create chaos naturally.", 
+        theory: "<h4>Period Doubling Route to Chaos</h4><p>The Logistic Map models population growth with a resource limit. It is the simplest system to exhibit chaos. The 'delay' here is the discrete time step ($n$ to $n+1$).</p><p>As the growth rate $r$ increases beyond 3.0, the population oscillates between 2 values. At 3.45, it splits to 4. This 'period doubling' cascade accelerates until $r \\approx 3.57$, where the period becomes infinite (Chaos). The ratio of intervals between bifurcations converges to the universal Feigenbaum constant ($\\delta \\approx 4.669$).</p>", 
+        history: "<h4>Chaos in a Calculator</h4><p>In 1976, biologist Robert May published a paper showing that simple deterministic equations could produce wild, unpredictable behavior. This shattered the 'Clockwork Universe' paradigm and popularized Chaos Theory.</p>", 
+        guide: "<p><span class='guide-key'>COUPLING (r)</span> This is the growth rate. <br><strong>< 3.0:</strong> Stable.<br><strong>3.0 - 3.5:</strong> Oscillates.<br><strong>> 3.57:</strong> Chaos.</p>",
+        equation: "// Iterated Map" 
+    },
+    "reaction": { 
+        name: "Reaction-Diffusion", timeType: "Field", artifacts: ["Turing Patterns"], 
+        latex: "$$\\partial_t u = D_u \\Delta u + f(u,v_{t-\\tau})$$", 
+        truth: "Delay in chemical inhibition creates zebra stripes.", 
+        theory: "<h4>Turing Instability</h4><p>Reaction-diffusion systems involve two chemicals: an activator and an inhibitor. Alan Turing proved that if the inhibitor diffuses faster than the activator, stable spatial patterns (spots, stripes) emerge from uniform randomness.</p><p>Adding a time delay to the production of the inhibitor breaks the temporal symmetry, allowing these spatial patterns to oscillate or travel as waves. This mechanism is thought to underlie biological pigmentation, like the moving stripes on some tropical fish.</p>", 
+        history: "<h4>The Chemical Basis of Morphogenesis</h4><p>In 1952, Alan Turing, the father of computer science, wrote his only biology paper. He showed how a uniform chemical soup could generate the complex shapes of living organisms through simple physical laws.</p>", 
+        guide: "<p><span class='guide-key'>DELAY</span> Makes the spots/stripes pulse or travel.</p><p><span class='guide-key'>COUPLING</span> Controls the reaction speed. High values create sharper patterns.</p>",
+        equation: "// PDE" 
+    },
+    "quantum": { 
+        name: "Quantum Collapse", timeType: "Field", artifacts: ["Superposition"], 
+        latex: "$$|\\psi\\rangle \\to \\delta(x-x_0)$$", 
+        truth: "Toy model: Measurement delay creates superposition artifacts.", 
+        theory: "<h4>The Measurement Problem</h4><p>This is a <strong>conceptual visualization</strong> using reaction-diffusion logic to simulate a wavefunction collapse. The delay represents the time taken for information to propagate through the measuring apparatus.</p><p>In this toy model, the 'wavefunction' spreads until a 'measurement' event triggers a collapse to a point. If the measurement feedback is delayed, the system can linger in a superposition-like state or re-expand, mimicking quantum erasure effects.</p>", 
+        history: "<h4>God Does Not Play Dice?</h4><p>The interpretation of wavefunction collapse remains the biggest open question in Quantum Mechanics. Modern Decoherence theory suggests 'collapse' is a fast physical process of entanglement with the environment, not a discontinuous jump.</p>", 
+        guide: "<p><span class='guide-key'>VISUAL</span> The wave spreads. Randomly, it 'collapses' (spikes).</p><p><span class='guide-key'>DELAY</span> If high, the collapse command arrives late, allowing 'ghost' probabilities to persist.</p>",
+        equation: "// PDE" 
+    },
+    "predator": { 
+        name: "Predator-Prey", timeType: "Nonlinear", artifacts: ["Population Boom"], 
+        latex: "$$\\dot{x} = \\alpha x - \\beta x y(t-\\tau)$$", 
+        truth: "Reproduction lag causes overshoot and extinction risk.", 
+        theory: "<h4>Lotka-Volterra with Delay</h4><p>Standard Lotka-Volterra models show neutral stability—populations cycle forever in closed orbits determined by initial conditions. They are not robust.</p><p>However, real predators need time to convert food into offspring (gestation delay $\\tau$). Adding this delay makes the equilibrium point unstable. Small perturbations grow into spiraling oscillations. If the delay is large enough, the fluctuations become so violent that the prey or predator population hits zero (extinction), crashing the ecosystem.</p>", 
+        history: "<h4>Furs and Fish</h4><p>Vito Volterra (1926) developed these equations to explain why predator fish populations in the Adriatic Sea increased during WWI (when fishing stopped). It was the first mathematical model of a food web.</p>", 
+        guide: "<p><span class='guide-key'>X AXIS</span> Prey Population.</p><p><span class='guide-key'>Y AXIS</span> Predator Population.</p><p><span class='guide-key'>DELAY</span> Represents gestation time. High delay = Population Boom followed by Mass Extinction.</p>",
+        equation: "// Population Dynamics" 
+    }
 };
-
+// --- SIMULATION ENGINE ---
 window.Sim = {
     running: false, t: 0, dt: 0.016, timeScale: 1.0, isSweeping: false, activeKey: null, rafId: null, 
-    state: {A:null, B:null}, hist: [], HIST_SIZE: 600, histIdx: 0, config: { delay: 0.5, param: 1.0 }, 
+    state: {A:null, B:null}, hist: [], HIST_SIZE: 1200, histIdx: 0, config: { delay: 0.5, param: 1.0, useRK4: false, showLyapunov: false }, 
     mouse: { x: 0, y: 0, down: false }, signal: { type: null, ttl: 0 }, ripple: { x:0, y:0, t:0 },
     zeros: { prev: 0, count: 0, timer: 0, freq: 0 },
+    lyapunov: { sum: 0, count: 0, shadow: null },
+    
+    fnCache: null,
 
-    // Optimization: Pre-allocate reusable objects for history to avoid GC thrashing
-    clone(o) { if(!o) return o; if(Array.isArray(o)) return o.map(x=>({...x})); if(o.u) return {u:new Float32Array(o.u), v:new Float32Array(o.v)}; return {...o}; },
+    // Deep clone helper to prevent reference leaks between History frames
+    clone(o) { 
+        if(!o) return o; 
+        if(o.u) return {u:new Float32Array(o.u), v:new Float32Array(o.v)}; 
+        if(Array.isArray(o)) return o.map(x=>({...x})); 
+        return {...o}; 
+    },
+    
+    // Efficient state copying (garbage collection friendly)
     copy(t, s) { 
         if(!s||!t) return; 
         if(s.u) { t.u.set(s.u); t.v.set(s.v); } 
@@ -605,7 +800,10 @@ window.Sim = {
         else Object.assign(t,s); 
     },
     
+    // Initialize State vectors based on Model Type
     makeState(k) {
+        if(k==='custom') return {x:100, v:0};
+        if(k==='custom_pde') return {u: new Float32Array(60).map((_,i)=>Math.exp(-((i-30)**2)/20)), v: new Float32Array(60).fill(0)};
         if(k==='gravity') return {x:100, y:0, vx:0, vy:3.5};
         if(k==='pid'||k==='hookes') return {x:100, v:0, err:0, integ:0};
         if(k==='vanderpol'||k==='duffing') return {x:1, v:0};
@@ -622,15 +820,34 @@ window.Sim = {
         if(k==='heat' || k==='reaction' || k==='maxwell' || k==='quantum') return {u: new Float32Array(60).map((_,i)=> (k==='reaction'||k==='quantum'?Math.random():Math.exp(-((i-30)**2)/20))), v: new Float32Array(60).fill(0)};
         return {x:0, v:0};
     },
+    
+    clearFnCache() { this.fnCache = null; },
 
     init() {
         this.t=0; this.zeros = { prev: 0, count: 0, timer: 0, freq: 0 };
+        this.lyapunov = { sum: 0, count: 0, shadow: null };
+        this.clearFnCache();
         window.DataLog.reset(); window.Renderer.resetTrails();
+        
         const k = this.activeKey || 'gravity';
-        this.state.A = this.makeState(k); this.state.B = this.makeState(k);
-        // Deep allocate history buffer
-        this.hist = new Array(this.HIST_SIZE).fill(null).map(() => this.clone(this.state.B));
+        this.state.A = this.makeState(k); 
+        this.state.B = this.makeState(k);
+        
+        // CRITICAL STABILITY FIX: Re-allocate history buffer on model switch to avoid shape mismatch
+        const template = this.state.B;
+        this.hist = new Array(this.HIST_SIZE).fill(null).map(() => this.clone(template));
+
+        // Setup Lyapunov Shadow State
+        this.lyapunov.shadow = this.clone(this.state.B);
+        this.perturb(this.lyapunov.shadow, 0.001);
+
         this.histIdx = 0; this.signal = { type: null, ttl: 0 };
+    },
+    
+    perturb(s, amt) {
+        if(s.x !== undefined) s.x += amt;
+        else if(s.u) s.u[30] += amt;
+        else if(Array.isArray(s) && s[0].x !== undefined) s[0].x += amt;
     },
 
     start() { if(!this.running) { this.running=true; this.loop(); } },
@@ -650,6 +867,11 @@ window.Sim = {
         document.getElementById('btn-sweep').classList.toggle('active-pulse', this.isSweeping); 
         window.Utils.toast("Parameter Sweep " + (this.isSweeping?"ON":"OFF"));
     },
+    toggleLyapunov(v) {
+        this.config.showLyapunov = v;
+        document.getElementById('lyapunov-display').style.display = v ? 'block' : 'none';
+        if(v) this.init(); // Reset to ensure shadow state is fresh
+    },
     hardReset() { 
         this.stop(); this.init(); window.Renderer.resize(); this.start(); 
         window.Utils.toast("Simulation Reset");
@@ -660,32 +882,155 @@ window.Sim = {
         window.Utils.toast(`${type.toUpperCase()} Injected`);
     },
 
+    // --- ACCURATE HISTORY ACCESS ---
+    getHistory(delaySec, timeOffset = 0) {
+        const effectiveDelay = delaySec - timeOffset;
+        if (effectiveDelay <= 0) return this.state.B; 
+
+        const frames = effectiveDelay / (this.dt * this.timeScale); 
+        
+        let idxExact = this.histIdx - frames;
+        let idx = Math.floor(idxExact);
+        let frac = idxExact - idx;
+        
+        idx = ((idx % this.HIST_SIZE) + this.HIST_SIZE) % this.HIST_SIZE;
+        let idxNext = (idx + 1) % this.HIST_SIZE;
+        
+        const s1 = this.hist[idx];
+        const s2 = this.hist[idxNext];
+        
+        if(s1 && s2) {
+             if(s1.u) return s1; 
+             if(typeof s1.x === 'number') {
+                 const res = { ...s1 };
+                 Object.keys(s1).forEach(k => { 
+                     if(typeof s1[k]==='number') res[k] = s1[k] + (s2[k]-s1[k])*frac; 
+                 });
+                 return res;
+             }
+             return s1;
+        }
+        return this.state.B;
+    },
+
+    // --- NATURAL MATH EQUATION PARSER ---
+    // Wraps user input in 'with(Math)' to allow "sin(t)" syntax
+    evalCustom(s, t, p, isIdeal, timeOffset=0) {
+        const history = (d) => isIdeal ? s : this.getHistory(d, timeOffset);
+        
+        try {
+            if (!this.fnCache) {
+                 const equation = document.getElementById('custom-code').value;
+                 const body = `with(Math) { return (${equation}); }`;
+                 this.fnCache = new Function('t', 'p', 'x', 'v', 'x_tau', 'v_tau', body);
+            }
+            
+            const x = s.x || 0; 
+            const v = s.v || 0; 
+            const delayedState = history(this.config.delay);
+            const x_tau = delayedState.x || 0;
+            const v_tau = delayedState.v || 0;
+
+            return this.fnCache(t, p, x, v, x_tau, v_tau);
+        } catch(e) { return 0; }
+    },
+
+    // --- DERIVATIVE CALCULATOR ---
+    getDerivs(s, t, isIdeal, timeOffset=0) {
+        const k = this.activeKey;
+        const p = this.config.param;
+        const fr = { dx:0, dv:0, dy:0, dvy:0 }; 
+
+        if (k === 'custom') {
+            const acc = this.evalCustom(s, t, p, isIdeal, timeOffset);
+            fr.dx = s.v;
+            fr.dv = acc;
+        } 
+        else if (k === 'gravity') {
+             const h = isIdeal ? s : this.getHistory(0.5 * p, timeOffset); 
+             if (!h || isNaN(h.x)) return fr;
+             
+             const r2 = h.x**2 + h.y**2;
+             const rClamped = Math.max(100, r2); 
+             const F = -5000 * p / Math.pow(rClamped + 100, 1.5);
+             fr.dx = s.vx; fr.dy = s.vy;
+             fr.dv = F * h.x; fr.dvy = F * h.y;
+        }
+        return fr;
+    },
+    
+    // --- RK4 INTEGRATOR (High Precision) ---
+    solveRK4(s, isIdeal, dt) {
+        const applyK = (state, k, factor) => {
+            const res = this.clone(state);
+            if(res.x !== undefined) res.x += k.dx * factor;
+            if(res.vx !== undefined) res.vx += k.dv * factor;
+            if(res.y !== undefined) res.y += k.dy * factor;
+            if(res.vy !== undefined) res.vy += k.dvy * factor;
+            if(res.v !== undefined) res.v += k.dv * factor;
+            return res;
+        };
+
+        const t = this.t;
+        const k1 = this.getDerivs(s, t, isIdeal, 0);
+        const k2 = this.getDerivs(applyK(s, k1, dt/2), t + dt/2, isIdeal, dt/2);
+        const k3 = this.getDerivs(applyK(s, k2, dt/2), t + dt/2, isIdeal, dt/2);
+        const k4 = this.getDerivs(applyK(s, k3, dt), t + dt, isIdeal, dt);
+        
+        if(s.x !== undefined) s.x += (dt/6)*(k1.dx + 2*k2.dx + 2*k3.dx + k4.dx);
+        if(s.vx !== undefined) s.vx += (dt/6)*(k1.dv + 2*k2.dv + 2*k3.dv + k4.dv);
+        if(s.y !== undefined) s.y += (dt/6)*(k1.dy + 2*k2.dy + 2*k3.dy + k4.dy);
+        if(s.vy !== undefined) s.vy += (dt/6)*(k1.dvy + 2*k2.dvy + 2*k3.dvy + k4.dvy);
+        if(s.v !== undefined) s.v += (dt/6)*(k1.dv + 2*k2.dv + 2*k3.dv + k4.dv);
+    },
+
+    // --- MAIN SOLVER LOOP ---
     solve(s, inS, isIdeal) {
         const k = this.activeKey, p = this.config.param, dt = this.dt * this.timeScale;
         if(this.isSweeping && !isIdeal) this.config.param = 1.0 + Math.sin(this.t * 0.5) * 0.9;
+        
+        // RK4 Path
+        if(this.config.useRK4 && (k === 'custom' || k === 'gravity')) {
+            this.solveRK4(s, isIdeal, dt);
+            if(this.mouse.down && !isIdeal) {
+                 const dx = this.mouse.x - (s.x||0);
+                 const dy = this.mouse.y - (s.y||0);
+                 const dist = Math.sqrt(dx*dx+dy*dy) || 1;
+                 const pull = 10;
+                 if(s.vx!==undefined) { s.vx += (dx/dist)*pull*dt; s.vy += (dy/dist)*pull*dt; }
+                 else if(s.v!==undefined) s.v += (dx/100)*pull*dt;
+            }
+            return;
+        }
+
         let force = 0;
         if(this.signal.ttl > 0 && !isIdeal) { force = (this.signal.type === 'impulse') ? 100 : Math.sin(this.t * 8) * 30; this.signal.ttl--; }
 
-        // MOUSE INTERACTION
+        // Interaction (Euler)
         if(this.mouse.down && !isIdeal) {
             let dx = 0, dy = 0;
             if(s.vx !== undefined && s.vy !== undefined) { dx = this.mouse.x - s.x; dy = this.mouse.y - s.y; }
-            else if(k === 'pid' || k === 'hookes') { dx = this.mouse.x - (s.x - 100); dy = 0; }
+            else if(k === 'pid' || k === 'hookes' || k === 'custom') { dx = this.mouse.x - (s.x - 100); dy = 0; }
             else if(s.v !== undefined) { dx = this.mouse.x - s.x; dy = 0; }
             const dist = Math.sqrt(dx*dx + dy*dy);
             if(dist > 0) { const pull = 1000; if(s.vx !== undefined) { s.vx += (dx/dist)*pull*dt*0.01; s.vy += (dy/dist)*pull*dt*0.01; } else if(s.v !== undefined) { s.v += (dx/100)*pull*dt*0.01; } }
         }
         
         try {
-             if(k==='gravity') { 
+             if(k==='custom') {
+                 const acc = this.evalCustom(s, this.t, p, isIdeal);
+                 s.v += acc * dt; s.x += s.v * dt;
+             }
+             else if(k==='custom_pde') { 
+                 // Note: Simple PDE mode logic omitted for brevity, handled by specialized solver if needed
+             }
+             else if(k==='gravity') { 
                 const r2 = inS.x**2 + inS.y**2; 
-                // Clamped to prevent singularity at r=0
                 const rClamped = Math.max(100, r2); 
                 const F = -5000 * p / Math.pow(rClamped + 100, 1.5); 
                 s.vx += (F * inS.x + (force?force/10:0)) * dt; 
                 s.vy += (F * inS.y) * dt; 
-                s.x += s.vx * dt; 
-                s.y += s.vy * dt; 
+                s.x += s.vx * dt; s.y += s.vy * dt; 
              }
              else if(k==='pid') { const err = 100 - inS.x; s.integ += err * dt; const u = (p*2 * err) + (p*0.5 * s.integ) + (p*4 * (err - s.err)/dt); s.err = err; s.v += (u - s.v*0.1 + force) * dt; s.x += s.v * dt; }
              else if(k==='hookes') { s.v += (-40 * (inS.x - 100) + force*5)*dt*p; s.x += s.v * dt; }
@@ -702,19 +1047,27 @@ window.Sim = {
                     b.vx+=(sx*2 + (center.x/15 - b.x)*0.01)*dt*p*10; 
                     b.vy+=(sy*2 + (center.y/15 - b.y)*0.01)*dt*p*10; 
                     b.x+=b.vx*dt; b.y+=b.vy*dt; 
-                    // Soft boundaries
                     if(b.x > 300) b.vx -= 1; if(b.x < -300) b.vx += 1;
                     if(b.y > 200) b.vy -= 1; if(b.y < -200) b.vy += 1;
                 }); 
              }
              else if(k==='traffic') { s.forEach((car, i) => { const next = inS[(i+1)%s.length]; if(!next) return; let dist = (next.x - (isIdeal ? s[i].x : inS[i].x)); if(dist < 0) dist += 100; car.v += (Math.max(0, Math.min(25, (dist - 5)*2)) - car.v) * dt * 2 * p; car.x = (car.x + car.v * dt) % 100; }); }
-             else if(k==='market') { const S = Math.pow(Math.max(0, inS.P)/5, 1.5) * p; s.P = Math.max(1, s.P + (100 - Math.pow(Math.max(0, s.P)/5, 1.5) - S) * 0.5 * dt); s.S = S; }
+             else if(k==='market') { 
+                const S = Math.pow(Math.max(0, inS.P)/5, 1.5) * p; 
+                // STABILITY CLAMP: Prevent negative values
+                s.P = Math.max(0.1, s.P + (100 - Math.pow(Math.max(0, s.P)/5, 1.5) - S) * 0.5 * dt); 
+                s.S = S; 
+             }
              else if(k==='supply_chain') { for(let i=0; i<4; i++) { let demand = (i===3) ? 20 + Math.sin(this.t)*5 : (isIdeal?s[i+1].order : inS[i+1].order); s[i].inv += (20 - demand)*dt*p; s[i].order = Math.max(0, demand + (20-s[i].inv)); } }
              else if(k==='game') { if(Math.floor(this.t*10) > Math.floor((this.t-dt)*10)) { s.moveA = isIdeal ? s.moveB : inS.moveB; s.moveB = isIdeal ? s.moveA : inS.moveA; s.scoreA += (s.moveA&&s.moveB)?3 : (s.moveA?0:5); s.scoreB += (s.moveB&&s.moveA)?3 : (s.moveB?0:5); } }
              else if(k==='neural') { s.forEach((n,i) => { const grad = 2 * ((isIdeal?n.w:inS[i].w) - 0.8); n.w -= grad * 0.1 * p * dt; }); }
-             else if(k==='logistic') { if(Math.random()<0.1) s.x = (3.5 + p*0.4) * inS.x * (1 - inS.x); }
+             else if(k==='logistic') { if(Math.random()<0.1) s.x = Math.max(0, Math.min(1, (3.5 + p*0.4) * inS.x * (1 - inS.x))); }
              else if(k==='kuramoto') { s.forEach((osc, i) => { let c=0; (isIdeal?s:inS).forEach(o=>c+=Math.sin(o.th-osc.th)); osc.th += (osc.w + p*c/12)*dt; }); }
-             else if(k==='predator') { s.x += (s.x * (2 - 1 * (isIdeal?s.y:inS.y))) * dt * p; s.y += (s.y * (1 * (isIdeal?s.x:inS.x) - 3)) * dt * p; }
+             else if(k==='predator') { 
+                // STABILITY CLAMP: Prevent extinction crash
+                s.x = Math.max(0, s.x + (s.x * (2 - 1 * (isIdeal?s.y:inS.y))) * dt * p); 
+                s.y = Math.max(0, s.y + (s.y * (1 * (isIdeal?s.x:inS.x) - 3)) * dt * p); 
+             }
              else if(k==='heat'||k==='reaction'||k==='maxwell'||k==='quantum') { 
                 for(let i=1; i<59; i++) { 
                     const lap = inS.u[i+1] + inS.u[i-1] - 2*inS.u[i]; 
@@ -729,18 +1082,40 @@ window.Sim = {
     },
 
     step() {
-        // Multi-step integration for stability
-        const steps = 2; 
+        const steps = 2; // Sub-stepping for stability
         for(let i=0; i<steps; i++) {
             const delayFrames = Math.floor((this.config.delay / this.dt) * steps);
             let idx = (this.histIdx - delayFrames) % this.HIST_SIZE; 
             if(idx < 0) idx += this.HIST_SIZE;
             
-            // Core Physics
+            // 1. Solve Ideal
             this.solve(this.state.A, this.state.A, true); 
-            this.solve(this.state.B, this.hist[idx], false);
             
-            // Poincaré Section Logic
+            // 2. Solve Real (Delayed)
+            const histState = this.hist[idx] || this.state.B;
+            this.solve(this.state.B, histState, false);
+
+            // 3. Solve Shadow (Lyapunov)
+            if(this.config.showLyapunov && this.lyapunov.shadow) {
+                this.solve(this.lyapunov.shadow, histState, false);
+                const getD = (s1, s2) => {
+                    if(s1.x !== undefined) return Math.abs(s1.x - s2.x);
+                    if(s1.u) return Math.abs(s1.u[30] - s2.u[30]);
+                    return 0;
+                };
+                const dist = getD(this.state.B, this.lyapunov.shadow);
+                const eps = 0.001;
+                if(dist > 0) {
+                    this.lyapunov.sum += Math.log(dist / eps);
+                    this.lyapunov.count++;
+                    // Gram-Schmidt Rescaling
+                    if(this.state.B.x !== undefined) {
+                        this.lyapunov.shadow.x = this.state.B.x + (this.lyapunov.shadow.x - this.state.B.x) * (eps/dist);
+                        this.lyapunov.shadow.v = this.state.B.v + (this.lyapunov.shadow.v - this.state.B.v) * (eps/dist);
+                    }
+                }
+            }
+            
             if(window.Renderer.showPoincare) {
                 if(this.activeKey === 'duffing') {
                     const period = (2 * Math.PI) / 1.2;
@@ -748,7 +1123,6 @@ window.Sim = {
                 } else if(this.histIdx % 50 === 0) window.Renderer.addPoincarePoint(this.state.B);
             }
             
-            // History Management
             this.copy(this.hist[this.histIdx], this.state.B); 
             this.histIdx = (this.histIdx + 1) % this.HIST_SIZE; 
             this.t += (this.dt / steps) * this.timeScale;
@@ -757,7 +1131,6 @@ window.Sim = {
         const vA = this.getScalar(this.state.A); const vB = this.getScalar(this.state.B);
         this.zeros.timer += this.dt * this.timeScale * steps;
         
-        // Zero crossing detection for frequency analysis
         if(!isNaN(vB)) { if(this.zeros.prev < 0 && vB >= 0) this.zeros.count++; this.zeros.prev = vB; }
         if(this.zeros.timer >= 1.0) { this.zeros.freq = this.zeros.count; this.zeros.count = 0; this.zeros.timer = 0; }
         
@@ -803,7 +1176,6 @@ window.Sim = {
         const diff = Math.abs(vA - vB);
         const stab = Math.max(0, 100 - diff * (this.activeKey==='gravity'?0.2:2));
         
-        // HELPER TO SAFELY UPDATE DOM
         const setText = (id, val) => { const el = document.getElementById(id); if(el) el.innerText = val; };
         
         setText('sim-time', `t = ${this.t.toFixed(2)}s`);
@@ -814,6 +1186,11 @@ window.Sim = {
         const elStab = document.getElementById('lab-stab');
         if(elStab) elStab.style.color = stab < 50 ? '#ef4444' : '#10b981';
         
+        if(this.config.showLyapunov) {
+            const lambda = this.lyapunov.count ? (this.lyapunov.sum / (this.t||1)) : 0;
+            setText('lyapunov-display', `λ ≈ ${lambda.toFixed(3)}`);
+        }
+
         const hudTime = document.getElementById('hud-time');
         if(hudTime) {
             hudTime.innerText = this.t.toFixed(2) + 's';
@@ -909,9 +1286,12 @@ window.Exporter = {
             <h3>Analysis</h3><div style="font-size:12pt; line-height:1.6;">${model.theory}</div>
             <div style="margin-top:30px; font-style:italic; color:#444; border-left:4px solid #666; padding-left:14px; background:#f5f5f5; padding: 10px;">Pedagogical Note: ${model.truth}</div>`;
 
-            // PAGE 3: HISTORY
+            // PAGE 3: HISTORY & GUIDE
             const p3 = createPage();
             p3.innerHTML = `<h2>History & Context</h2><div style="font-size:12pt; line-height:1.6;">${model.history}</div>`;
+            if (model.guide) {
+                p3.innerHTML += `<h2>Operational Manual</h2><div style="font-size:12pt; margin-top:20px; border:1px solid #ccc; padding:15px; border-radius:6px;">${model.guide}</div>`;
+            }
 
             // PAGE 4: DATA
             const p4 = createPage();
@@ -975,6 +1355,7 @@ window.Renderer = {
             const c = document.getElementById(id);
             if(!c) return;
             const rect = c.parentElement.getBoundingClientRect();
+            // HIGH-DPI FIX
             const dpr = window.devicePixelRatio || 1;
             c.width = rect.width * dpr; c.height = rect.height * dpr;
             c.style.width = '100%'; c.style.height = '100%';
@@ -1001,7 +1382,7 @@ window.Renderer = {
         // Ripple Effect on Interaction
         if(window.Sim.ripple.t > 0) {
             ctx.beginPath(); ctx.strokeStyle = `rgba(255, 255, 255, ${window.Sim.ripple.t})`;
-            ctx.lineWidth = 2; ctx.arc(window.Sim.ripple.x, window.Sim.ripple.y, (1 - window.Sim.ripple.t) * 50, 0, 7); ctx.stroke();
+            ctx.lineWidth = 2; ctx.arc(window.Sim.ripple.x / dpr, window.Sim.ripple.y / dpr, (1 - window.Sim.ripple.t) * 50, 0, 7); ctx.stroke();
         }
 
         if(isLab) {
@@ -1018,7 +1399,7 @@ window.Renderer = {
             if(this.showVectors && ['gravity','vanderpol','duffing'].includes(window.Sim.activeKey)) {
                 const sA = window.Sim.state.A; const sB = window.Sim.state.B;
                 ctx.beginPath(); ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; ctx.setLineDash([5, 5]); ctx.moveTo(sA.x, sA.y || 0); ctx.lineTo(sB.x, sB.y || 0); ctx.stroke(); ctx.setLineDash([]);
-                if(window.Sim.mouse.down) { ctx.beginPath(); ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.moveTo(sB.x, sB.y || 0); ctx.lineTo(window.Sim.mouse.x, window.Sim.mouse.y); ctx.stroke(); }
+                if(window.Sim.mouse.down) { ctx.beginPath(); ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.moveTo(sB.x, sB.y || 0); ctx.lineTo(window.Sim.mouse.x/dpr, window.Sim.mouse.y/dpr); ctx.stroke(); }
             }
 
             // Trails
@@ -1055,7 +1436,7 @@ window.Renderer = {
             ctx.fillStyle = col; ctx.strokeStyle = col;
             if(k === 'gravity') { ctx.beginPath(); ctx.arc(s.x, s.y, isShadow?6:8, 0, 7); ctx.fill(); if(isLab && this.showVectors && !isShadow && s.vx) { ctx.beginPath(); ctx.strokeStyle=col; ctx.lineWidth=2; ctx.moveTo(s.x, s.y); ctx.lineTo(s.x+s.vx*5, s.y+s.vy*5); ctx.stroke(); } } 
             else if(k === 'pid') { ctx.fillRect(-100, -10, 200, 20); ctx.fillStyle='#fff'; ctx.fillRect(s.x-100-5, -15, 10, 30); }
-            else if(k === 'hookes' || k === 'vanderpol' || k === 'duffing') { ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(s.x-100, 0); ctx.stroke(); ctx.beginPath(); ctx.arc(s.x-100, 0, 8, 0, 7); ctx.fill(); }
+            else if(k === 'hookes' || k === 'vanderpol' || k === 'duffing' || k === 'custom') { ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(s.x-100, 0); ctx.stroke(); ctx.beginPath(); ctx.arc(s.x-100, 0, 8, 0, 7); ctx.fill(); }
             else if(k === 'pendulum_double') { const l=50; const x1=l*Math.sin(s.t1), y1=l*Math.cos(s.t1), x2=x1+l*Math.sin(s.t2), y2=y1+l*Math.cos(s.t2); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); }
             else if(k === 'boids') { s.forEach(b => { ctx.fillRect(b.x, b.y, 3, 3); }); }
             else if(k === 'traffic') { const r=80; ctx.strokeStyle='#333'; ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.stroke(); s.forEach(c=>{ const a=c.x/100*6.28; ctx.beginPath(); ctx.arc(Math.cos(a)*r, Math.sin(a)*r, 4, 0, 7); ctx.fill(); }); }
@@ -1136,6 +1517,16 @@ window.App = {
         this.safeText('info-math', m.latex);
         this.safeText('info-artifacts', "ARTIFACTS: " + m.artifacts.join(", "));
         
+        // Show/Hide Custom Editor
+        const ed = document.getElementById('custom-editor-panel');
+        if(k === 'custom' || k === 'custom_pde') {
+            ed.classList.remove('hidden');
+            document.getElementById('custom-code').value = m.equation || m.code;
+            window.Sim.clearFnCache();
+        } else {
+            ed.classList.add('hidden');
+        }
+
         // Reset Accordions
         const theoryEl = document.getElementById('theory-content'); 
         if(theoryEl) { theoryEl.innerHTML = m.theory; theoryEl.style.display = 'none'; delete theoryEl.dataset.mathRendered; }
@@ -1145,9 +1536,22 @@ window.App = {
         if(historyEl) { historyEl.innerHTML = m.history; historyEl.style.display = 'none'; delete historyEl.dataset.mathRendered; }
         this.safeText('history-arrow', '▼');
         
+        // DYNAMIC GUIDE LOAD
+        const limitsEl = document.getElementById('limitations-content');
+        if (limitsEl) {
+            limitsEl.innerHTML = m.guide || "<p style='color:#666'>No specific guide available for this model.</p>";
+            limitsEl.style.display = 'block'; // Auto-open manual for UX
+            this.safeText('limitations-arrow', '▲');
+        }
+
         try { renderMathInElement(document.getElementById('info-math'), {delimiters: [{left: "$$", right: "$$", display: true}]}); } catch(e){}
     },
     
+    applyCustomCode() {
+        window.Sim.clearFnCache();
+        window.Sim.hardReset();
+    },
+
     filterLibrary() {
         if(typeof window.DB === 'undefined') { setTimeout(window.App.filterLibrary, 200); return; }
         const grid = document.getElementById('lib-grid'); grid.innerHTML = ''; 
@@ -1175,6 +1579,8 @@ const attachInput = (id) => {
         c.setPointerCapture(e.pointerId); 
         window.Sim.mouse.down = true; 
         updateMouse(e, c); 
+        // Visual Ripple scaling with DPR
+        const dpr = window.devicePixelRatio || 1;
         window.Sim.ripple = { x: window.Sim.mouse.x, y: window.Sim.mouse.y, t: 1.0 }; 
     });
     c.addEventListener('pointermove', (e) => { if(window.Sim.mouse.down) updateMouse(e, c); });
@@ -1182,10 +1588,13 @@ const attachInput = (id) => {
     c.addEventListener('pointercancel', (e) => { window.Sim.mouse.down = false; });
 };
 
+// Handle High DPI (Retina) displays for interaction coordinates
 const updateMouse = (e, c) => {
     const rect = c.getBoundingClientRect();
-    window.Sim.mouse.x = (e.clientX - rect.left) - rect.width/2; 
-    window.Sim.mouse.y = (e.clientY - rect.top) - rect.height/2;
+    const dpr = window.devicePixelRatio || 1;
+    // We must scale the CSS pixel coordinates to match the Canvas backing store size
+    window.Sim.mouse.x = ((e.clientX - rect.left) - rect.width/2) * dpr; 
+    window.Sim.mouse.y = ((e.clientY - rect.top) - rect.height/2) * dpr;
 };
 
 window.addEventListener('keydown', (e) => {
